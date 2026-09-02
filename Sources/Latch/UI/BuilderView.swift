@@ -11,6 +11,7 @@
 //  de désactiver la poignée.
 //
 
+import AppKit
 import SwiftUI
 
 struct BuilderView: View {
@@ -261,6 +262,7 @@ private struct ConnectionFields: View {
 
             if connection.transport.isRemote {
                 Field("Hôte", placeholder: "alias ~/.ssh/config", text: $connection.host)
+                ResolvedHost(alias: connection.host)
             }
 
             if connection.transport == .sshJump {
@@ -347,6 +349,65 @@ private struct ConnectionFields: View {
                 connection.initialCommand = kind.makeCommand()
             }
         )
+    }
+}
+
+/// Où mène réellement l'alias.
+///
+/// Le champ « Hôte » contient un alias, pas une adresse : c'est `~/.ssh/config`
+/// qui décide où il pointe, et Latch ne possède pas ce fichier. Ne rien
+/// afficher laissait l'utilisateur sans aucun moyen de savoir d'où sortait
+/// l'adresse, ni où la changer — alors que le §14 prévient qu'elle bouge.
+private struct ResolvedHost: View {
+    let alias: String
+
+    @State private var target: String?
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Spacer().frame(width: 90)
+
+            if let target {
+                Text(target)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.latchTextFaint)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+
+                Button("~/.ssh/config") {
+                    NSWorkspace.shared.selectFile(
+                        SSHConfig.defaultURL.path,
+                        inFileViewerRootedAtPath: SSHConfig.defaultURL.deletingLastPathComponent().path
+                    )
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color.latchAccent)
+                .help("Ouvrir le fichier qui décide où pointe cet alias")
+            }
+            Spacer(minLength: 0)
+        }
+        .task(id: alias) {
+            target = Self.resolve(alias)
+        }
+    }
+
+    /// `ssh -G` applique tout le fichier — `HostName`, `User`, `Port`, `Match`,
+    /// les inclusions — et rend ce que ssh utiliserait vraiment.
+    private static func resolve(_ alias: String) -> String? {
+        let trimmed = alias.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        guard let hostName = SSHConfig.effectiveValue("hostname", for: trimmed) else { return nil }
+
+        let user = SSHConfig.effectiveValue("user", for: trimmed)
+        let port = SSHConfig.effectiveValue("port", for: trimmed) ?? "22"
+
+        var description = hostName
+        if let user { description = "\(user)@\(description)" }
+        if port != "22" { description += ":\(port)" }
+        // Un alias inconnu de ssh se résout en lui-même : ne rien dire vaut
+        // mieux que faire croire à une configuration qui n'existe pas.
+        return hostName == trimmed ? nil : description
     }
 }
 

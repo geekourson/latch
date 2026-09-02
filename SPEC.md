@@ -384,6 +384,11 @@ NSWorkspace.shared.notificationCenter.addObserver(
 
 - Barre de titre transparente (`titlebarAppearsTransparent`,
   `titleVisibility = .hidden`), feux de circulation atténués au repos.
+- L'hôte d'une connexion est un **alias** de `~/.ssh/config`, pas une adresse.
+  L'écran du builder affiche donc, sous le champ, où cet alias mène réellement
+  (`ssh -G` : utilisateur, hôte, port) et un lien vers le fichier qui en décide.
+  Sans ça, personne ne sait d'où sort l'adresse ni où la changer — alors que le
+  §14 prévient qu'elle bouge.
 - Barre latérale ~180 px, **sans bordure** — la séparation se fait par le vide.
   Serveurs en gras, sessions tmux indentées en mono en dessous. Pastille d'état
   par serveur : vert (connecté), ambre (veille / dégradé), gris (hors ligne).
@@ -501,6 +506,24 @@ demander » doit écrire une règle dans `permissions.allow` côté serveur, jam
 garder l'état localement.
 
 ---
+
+### Sessions tmux sans raccourci
+
+`tmux new -A` ne ferme jamais rien — c'est ce qui fait tenir la promesse du §1 —
+mais les sessions s'accumulent alors sur le serveur. Elles apparaissent de deux
+façons : un raccourci renommé qui abandonne l'ancienne derrière lui, ou une
+session ouverte à la main.
+
+Latch les **montre** dans la barre latérale, en retrait et grisées, avec leur
+âge et leur nombre de fenêtres, et propose au clic droit de créer un raccourci
+dessus ou de les fermer, avec confirmation. Elle n'en ferme **jamais** une
+d'elle-même, et surtout pas sur un critère d'âge : derrière un nom oublié peut
+tourner un travail qui compte, et tmux ne dit pas la différence entre une
+session abandonnée et une session qui travaille sans personne.
+
+Renommer la session tmux d'un raccourci déclenche un `tmux rename-session` sur
+l'hôte plutôt que d'en créer une neuve à côté : le travail suit le raccourci,
+et l'orpheline n'est pas fabriquée.
 
 ## 11. Sécurité
 

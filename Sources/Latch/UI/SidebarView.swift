@@ -26,6 +26,15 @@ struct SidebarView: View {
                         LocalSectionHeader()
                         ForEach(loose) { shortcut in
                             ShortcutRow(shortcut: shortcut)
+
+                            ForEach(app.liveWindows(on: "",
+                                                    session: shortcut.connection.tmuxSession)) { window in
+                                WindowRow(window: window, host: "")
+                            }
+                        }
+
+                        ForEach(app.orphanSessions(on: "")) { session in
+                            OrphanRow(session: session, host: "")
                         }
                     }
 
@@ -111,6 +120,10 @@ private struct ServerSection: View {
                                         session: shortcut.connection.tmuxSession)) { window in
                     WindowRow(window: window, host: server.sshAlias)
                 }
+            }
+
+            ForEach(app.orphanSessions(on: server.sshAlias)) { session in
+                OrphanRow(session: session, host: server.sshAlias)
             }
         }
         .padding(.top, 8)
@@ -203,6 +216,55 @@ private struct WindowRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Une session tmux que plus aucun raccourci ne désigne. Elle existe, elle
+/// occupe le serveur, et sans cette ligne personne ne la verrait jamais.
+///
+/// Latch ne la ferme pas de lui-même : derrière un nom oublié peut tourner un
+/// travail qui compte, et tmux ne dit pas la différence.
+private struct OrphanRow: View {
+    @EnvironmentObject private var app: AppState
+    let session: LiveSession
+    let host: String
+
+    @State private var confirmsClosing = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(session.name)
+                .foregroundStyle(Color.latchTextFaint)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Text(session.age)
+                .foregroundStyle(Color.latchTextFaint.opacity(0.7))
+        }
+        .font(.system(size: 10.5, design: .monospaced))
+        .italic()
+        .padding(.leading, 15)
+        .padding(.trailing, 6)
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .help("Session sans raccourci — \(session.summary)")
+        .contextMenu {
+            Button("Créer un raccourci ici") { app.adopt(session, on: host) }
+            Divider()
+            Button("Fermer la session…", role: .destructive) { confirmsClosing = true }
+        }
+        .confirmationDialog(
+            "Fermer la session « \(session.name) » ?",
+            isPresented: $confirmsClosing,
+            titleVisibility: .visible
+        ) {
+            Button("Fermer la session", role: .destructive) {
+                app.closeSession(session, on: host)
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("\(session.summary). Tout ce qui y tourne sera interrompu, "
+                + "et ce qui n'a pas été enregistré sera perdu.")
+        }
     }
 }
 

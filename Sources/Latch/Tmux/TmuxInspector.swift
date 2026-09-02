@@ -30,6 +30,45 @@ struct LiveWindow: Identifiable, Equatable {
     var target: String { "\(session):\(index)" }
 }
 
+/// Une session telle que tmux la connaît, avec de quoi juger si on l'a oubliée.
+struct LiveSession: Identifiable, Equatable {
+    var name: String
+    var created: Date
+    var isAttached: Bool
+    var windowCount: Int
+
+    var id: String { name }
+
+    /// « il y a 3 j », « il y a 2 h ». Assez pour décider quoi en faire.
+    var age: String {
+        let seconds = Date().timeIntervalSince(created)
+        switch seconds {
+        case ..<90: return "à l'instant"
+        case ..<3600: return "il y a \(Int(seconds / 60)) min"
+        case ..<86400: return "il y a \(Int(seconds / 3600)) h"
+        default: return "il y a \(Int(seconds / 86400)) j"
+        }
+    }
+
+    var summary: String {
+        let windows = windowCount == 1 ? "1 fenêtre" : "\(windowCount) fenêtres"
+        return "\(windows), \(age)"
+    }
+
+    static func parse(fields: [String]) -> LiveSession? {
+        guard fields.count >= 4,
+              let created = TimeInterval(fields[1]),
+              let windows = Int(fields[3])
+        else { return nil }
+        return LiveSession(
+            name: fields[0],
+            created: Date(timeIntervalSince1970: created),
+            isAttached: fields[2] == "1",
+            windowCount: windows
+        )
+    }
+}
+
 // MARK: - Interrogation
 
 @MainActor
@@ -43,12 +82,16 @@ final class TmuxInspector: ObservableObject {
     @Published private(set) var windows: [String: [LiveWindow]] = [:]
     /// L'état git du panneau actif, par session (§9.1).
     @Published private(set) var repositories: [String: LiveRepository] = [:]
+    /// Toutes les sessions de l'hôte, y compris celles qu'aucun raccourci ne
+    /// désigne : sans ça, elles s'accumulent sans que personne les voie.
+    @Published private(set) var sessions: [LiveSession] = []
 
     /// Le séparateur doit être improbable dans un nom de fenêtre — une
     /// tabulation l'est, un espace ne l'est pas.
     nonisolated static let separator = "\u{1F}"
     nonisolated private static let recordEnd = "LATCH_END"
     nonisolated static let gitPrefix = "LATCH_GIT"
+    nonisolated static let sessionPrefix = "LATCH_SES"
 
     /// Une boucle côté serveur plutôt qu'un ssh par sondage : une connexion,
     /// tenue ouverte, qui réémet tout régulièrement.
@@ -62,7 +105,13 @@ final class TmuxInspector: ObservableObject {
             "#{window_active}", "#{pane_current_command}",
         ].joined(separator: separator)
 
+        let sessionFormat = [
+            "\(sessionPrefix)#{session_name}", "#{session_created}",
+            "#{session_attached}", "#{session_windows}",
+        ].joined(separator: separator)
+
         return "while :; do \(tmux) list-windows -a -F '\(format)' 2>/dev/null; "
+            + "\(tmux) list-sessions -F '\(sessionFormat)' 2>/dev/null; "
             + gitLoop(tmux: tmux) + "; echo '\(recordEnd)'; sleep \(seconds); done"
     }
 
@@ -88,6 +137,7 @@ final class TmuxInspector: ObservableObject {
     private var buffer = Data()
     private var pending: [LiveWindow] = []
     private var pendingRepositories: [String: LiveRepository] = [:]
+    private var pendingSessions: [LiveSession] = []
     private var retryTask: Task<Void, Never>?
     private var attempt = 0
     private var isStopped = false
@@ -119,6 +169,7 @@ final class TmuxInspector: ObservableObject {
         process = nil
         windows = [:]
         repositories = [:]
+        sessions = []
     }
 
     private func launch() {
@@ -169,6 +220,7 @@ final class TmuxInspector: ObservableObject {
         buffer.removeAll()
         pending.removeAll()
         pendingRepositories.removeAll()
+        pendingSessions.removeAll()
         guard !isStopped else { return }
         scheduleRetry()
     }
@@ -203,8 +255,17 @@ final class TmuxInspector: ObservableObject {
         if trimmed == Self.recordEnd {
             windows = Dictionary(grouping: pending, by: \.session)
             repositories = pendingRepositories
+            sessions = pendingSessions.sorted { $0.name < $1.name }
             pending.removeAll()
             pendingRepositories.removeAll()
+            pendingSessions.removeAll()
+            return
+        }
+
+        if trimmed.hasPrefix(Self.sessionPrefix) {
+            let fields = String(trimmed.dropFirst(Self.sessionPrefix.count))
+                .components(separatedBy: Self.separator)
+            if let session = LiveSession.parse(fields: fields) { pendingSessions.append(session) }
             return
         }
 
@@ -235,6 +296,34 @@ final class TmuxInspector: ObservableObject {
     }
 
     // MARK: Action
+
+    /// Renomme une session sur l'hôte. C'est ce qui évite de fabriquer une
+    /// orpheline quand un raccourci change de nom : le travail suit.
+    func rename(from old: String, to new: String) {
+        run(["rename-session", "-t", old, new])
+    }
+
+    /// Ferme une session. Jamais automatique, jamais sans confirmation :
+    /// derrière un nom oublié peut tourner quelque chose qui compte.
+    func kill(_ name: String) {
+        run(["kill-session", "-t", name])
+    }
+
+    private func run(_ arguments: [String]) {
+        let task = Process()
+        if let alias {
+            let remote = (["tmux"] + arguments).map(ShellQuoting.quoted).joined(separator: " ")
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            task.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, remote]
+        } else {
+            guard let tmux = localTmux else { return }
+            task.executableURL = URL(fileURLWithPath: tmux)
+            task.arguments = arguments
+        }
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+    }
 
     /// Bascule la session distante sur cette fenêtre. Le terminal attaché suit
     /// tout seul : c'est tmux qui décide de ce qu'il affiche.

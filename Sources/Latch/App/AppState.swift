@@ -36,6 +36,8 @@ final class AppState: ObservableObject {
     @Published private(set) var liveWindows: [String: [String: [LiveWindow]]] = [:]
     /// L'état git du panneau actif, par hôte puis par session (§9.1).
     @Published private(set) var liveRepositories: [String: [String: LiveRepository]] = [:]
+    /// Toutes les sessions tmux vues sur un hôte, raccourci ou pas.
+    @Published private(set) var liveSessions: [String: [LiveSession]] = [:]
     private var inspectors: [String: TmuxInspector] = [:]
 
     /// La latence, par hôte (§9.1).
@@ -231,6 +233,7 @@ final class AppState: ObservableObject {
                     guard let self, let inspector else { return }
                     self.liveWindows[host] = inspector.windows
                     self.liveRepositories[host] = inspector.repositories
+                    self.liveSessions[host] = inspector.sessions
                 }
             }
             .store(in: &cancellables)
@@ -262,6 +265,7 @@ final class AppState: ObservableObject {
             inspectors.removeValue(forKey: host)
             liveWindows.removeValue(forKey: host)
             liveRepositories.removeValue(forKey: host)
+            liveSessions.removeValue(forKey: host)
         }
         for (host, probe) in latencyProbes where !liveHosts.contains(host) {
             probe.stop()
@@ -290,6 +294,48 @@ final class AppState: ObservableObject {
     }
 
     func latency(on host: String) -> String? { latencies[host] }
+
+    // MARK: - Sessions sans raccourci
+
+    /// Les sessions tmux que plus aucun raccourci ne désigne.
+    ///
+    /// Elles naissent de deux façons : un raccourci renommé qui laisse
+    /// l'ancienne derrière lui, ou une session ouverte à la main sur le
+    /// serveur. Latch ne les ferme jamais tout seul — derrière un nom oublié
+    /// peut tourner quelque chose qui compte — mais les montrer vaut mieux que
+    /// les laisser s'accumuler sans témoin.
+    func orphanSessions(on host: String) -> [LiveSession] {
+        let known = Set(
+            store.shortcuts
+                .filter { $0.connection.transport.isRemote == !host.isEmpty }
+                .filter { host.isEmpty || $0.connection.host == host }
+                .map(\.connection.tmuxSession)
+        )
+        return (liveSessions[host] ?? []).filter { !known.contains($0.name) }
+    }
+
+    /// Injecte des sessions sans passer par un serveur : réservé aux tests, qui
+    /// ne peuvent pas ouvrir de connexion ssh.
+    func setLiveSessionsForTesting(_ sessions: [LiveSession], on host: String) {
+        liveSessions[host] = sessions
+    }
+
+    /// Ferme une session sur l'hôte. Toujours à la demande explicite.
+    func closeSession(_ session: LiveSession, on host: String) {
+        inspectors[host]?.kill(session.name)
+    }
+
+    /// Ouvre le builder pré-rempli sur une session existante, pour l'adopter.
+    func adopt(_ session: LiveSession, on host: String) {
+        editedShortcut = Shortcut(
+            name: session.name,
+            connection: Connection(
+                transport: host.isEmpty ? .local : .mosh,
+                host: host,
+                tmuxSession: session.name
+            )
+        )
+    }
 
     /// Installe les hooks sur un hôte, puis rouvre le flux pour que
     /// l'indicateur s'allume sans attendre une reconnexion.
@@ -405,6 +451,18 @@ final class AppState: ObservableObject {
     }
 
     func save(_ shortcut: Shortcut) {
+        // Changer le nom de session sans rien faire d'autre abandonnerait la
+        // session distante et en créerait une neuve à côté. On la renomme :
+        // le travail suit le raccourci.
+        if let previous = store.shortcut(id: shortcut.id),
+           previous.connection.tmuxSession != shortcut.connection.tmuxSession,
+           previous.connection.host == shortcut.connection.host {
+            inspectors[shortcut.connection.host]?.rename(
+                from: previous.connection.tmuxSession,
+                to: shortcut.connection.tmuxSession
+            )
+        }
+
         if store.shortcut(id: shortcut.id) == nil {
             store.add(shortcut)
         } else {

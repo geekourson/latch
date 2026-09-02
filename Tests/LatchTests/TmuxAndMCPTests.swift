@@ -504,3 +504,146 @@ final class LatencyProbeTests: XCTestCase {
         XCTAssertNil(LatencyProbe(host: "billy").label)
     }
 }
+
+// MARK: - Sessions sans raccourci
+
+final class LiveSessionTests: XCTestCase {
+
+    private let separator = "\u{1F}"
+
+    private func session(created: Date = Date(), attached: Bool = false, windows: Int = 1)
+        -> LiveSession
+    {
+        LiveSession(name: "api", created: created, isAttached: attached, windowCount: windows)
+    }
+
+    func testParsesASessionLine() throws {
+        let parsed = try XCTUnwrap(
+            LiveSession.parse(fields: ["gribouille", "1756748321", "0", "3"])
+        )
+        XCTAssertEqual(parsed.name, "gribouille")
+        XCTAssertFalse(parsed.isAttached)
+        XCTAssertEqual(parsed.windowCount, 3)
+        XCTAssertEqual(parsed.created, Date(timeIntervalSince1970: 1_756_748_321))
+    }
+
+    func testRefusesIncompleteLines() {
+        XCTAssertNil(LiveSession.parse(fields: ["api", "pas-un-nombre", "0", "1"]))
+        XCTAssertNil(LiveSession.parse(fields: ["api", "1756748321", "0"]))
+    }
+
+    /// L'âge sert à décider quoi en faire : il doit se lire d'un coup d'œil.
+    func testAgeReadsAtAGlance() {
+        XCTAssertEqual(session(created: Date()).age, "à l'instant")
+        XCTAssertEqual(session(created: Date(timeIntervalSinceNow: -600)).age, "il y a 10 min")
+        XCTAssertEqual(session(created: Date(timeIntervalSinceNow: -7200)).age, "il y a 2 h")
+        XCTAssertEqual(session(created: Date(timeIntervalSinceNow: -3 * 86400)).age, "il y a 3 j")
+    }
+
+    func testSummaryCountsWindows() {
+        XCTAssertTrue(session(windows: 1).summary.hasPrefix("1 fenêtre,"))
+        XCTAssertTrue(session(windows: 4).summary.hasPrefix("4 fenêtres,"))
+    }
+
+    /// La boucle distante relève aussi les sessions, dans le même passage.
+    func testTheWatchCommandListsSessionsToo() {
+        let command = TmuxInspector.watchCommand()
+        XCTAssertTrue(command.contains("list-sessions -F"))
+        XCTAssertTrue(command.contains("#{session_created}"))
+        XCTAssertTrue(command.contains("#{session_windows}"))
+    }
+}
+
+@MainActor
+final class OrphanSessionTests: XCTestCase {
+
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latch-orphans-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func makeState() -> AppState {
+        AppState(
+            store: SessionStore(
+                fileURL: directory.appendingPathComponent("shortcuts.json"),
+                seedFromSSHConfig: false
+            )
+        )
+    }
+
+    private func shortcut(session: String, host: String) -> Shortcut {
+        Shortcut(
+            name: session,
+            connection: Connection(
+                transport: host.isEmpty ? .local : .mosh, host: host, tmuxSession: session
+            )
+        )
+    }
+
+    /// Le cas vécu : un raccourci renommé laisse son ancienne session derrière
+    /// lui, et une session ouverte à la main sur le serveur n'a jamais eu de
+    /// raccourci. Les deux doivent se voir.
+    func testASessionWithoutAShortcutIsAnOrphan() {
+        let state = makeState()
+        state.store.add(shortcut(session: "api", host: "billy"))
+
+        XCTAssertEqual(state.orphanSessions(on: "billy"), [])
+
+        state.setLiveSessionsForTesting(
+            [
+                LiveSession(name: "api", created: Date(), isAttached: true, windowCount: 1),
+                LiveSession(name: "gribouille", created: Date(), isAttached: false, windowCount: 1),
+            ],
+            on: "billy"
+        )
+        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["gribouille"])
+    }
+
+    /// Les raccourcis d'un autre hôte ne protègent pas une session ici.
+    func testShortcutsOfAnotherHostDoNotCount() {
+        let state = makeState()
+        state.store.add(shortcut(session: "api", host: "ailleurs"))
+        state.setLiveSessionsForTesting(
+            [LiveSession(name: "api", created: Date(), isAttached: false, windowCount: 1)],
+            on: "billy"
+        )
+        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["api"])
+    }
+
+    /// Et les raccourcis locaux ne protègent que les sessions locales.
+    func testLocalAndRemoteAreKeptApart() {
+        let state = makeState()
+        state.store.add(shortcut(session: "notes", host: ""))
+
+        state.setLiveSessionsForTesting(
+            [LiveSession(name: "notes", created: Date(), isAttached: false, windowCount: 1)],
+            on: ""
+        )
+        XCTAssertEqual(state.orphanSessions(on: ""), [])
+
+        state.setLiveSessionsForTesting(
+            [LiveSession(name: "notes", created: Date(), isAttached: false, windowCount: 1)],
+            on: "billy"
+        )
+        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["notes"])
+    }
+
+    /// Adopter une orpheline pré-remplit le builder sur elle, sans rien créer
+    /// tant qu'on n'a pas enregistré.
+    func testAdoptingPrefillsTheBuilder() {
+        let state = makeState()
+        let orphan = LiveSession(name: "gribouille", created: Date(), isAttached: false, windowCount: 2)
+        state.adopt(orphan, on: "billy")
+
+        XCTAssertEqual(state.editedShortcut?.connection.tmuxSession, "gribouille")
+        XCTAssertEqual(state.editedShortcut?.connection.host, "billy")
+        XCTAssertTrue(state.store.shortcuts.isEmpty, "rien n'est créé avant l'enregistrement")
+    }
+}
