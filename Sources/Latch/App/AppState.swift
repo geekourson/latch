@@ -34,7 +34,13 @@ final class AppState: ObservableObject {
 
     /// Les vraies fenêtres tmux, par hôte (§12, v0.4).
     @Published private(set) var liveWindows: [String: [String: [LiveWindow]]] = [:]
+    /// L'état git du panneau actif, par hôte puis par session (§9.1).
+    @Published private(set) var liveRepositories: [String: [String: LiveRepository]] = [:]
     private var inspectors: [String: TmuxInspector] = [:]
+
+    /// La latence, par hôte (§9.1).
+    @Published private(set) var latencies: [String: String] = [:]
+    private var latencyProbes: [String: LatencyProbe] = [:]
 
     /// Le serveur MCP qui expose Latch à Claude Code (§10).
     let mcp = MCPServer()
@@ -180,6 +186,11 @@ final class AppState: ObservableObject {
     /// journal d'événements. Elle échoue en silence si les hooks ne sont pas
     /// installés : le fichier est simplement vide.
     private func followHooks(on host: String) {
+        // Le Mac aussi a des fenêtres tmux et un dépôt à montrer : il n'a
+        // simplement ni hooks Claude Code ni latence réseau.
+        guard inspectors[host] == nil else { return }
+        watchTmux(on: host)
+
         guard !host.isEmpty, hookStreams[host] == nil else { return }
 
         let stream = HookStream(
@@ -194,7 +205,23 @@ final class AppState: ObservableObject {
         hookStreams[host] = stream
         stream.start()
 
-        let inspector = TmuxInspector(alias: host)
+        // La latence se mesure sur l'adresse réelle, pas sur l'alias.
+        let probe = LatencyProbe(host: SSHConfig.effectiveValue("hostname", for: host) ?? host)
+        latencyProbes[host] = probe
+        probe.objectWillChange
+            .sink { [weak self, weak probe] in
+                DispatchQueue.main.async {
+                    guard let self, let probe else { return }
+                    self.latencies[host] = probe.label
+                }
+            }
+            .store(in: &cancellables)
+        probe.start()
+    }
+
+    /// Les fenêtres et le dépôt, sur un hôte distant comme sur le Mac.
+    private func watchTmux(on host: String) {
+        let inspector = TmuxInspector(alias: host.isEmpty ? nil : host)
         inspectors[host] = inspector
         inspector.objectWillChange
             .sink { [weak self, weak inspector] in
@@ -203,6 +230,7 @@ final class AppState: ObservableObject {
                 DispatchQueue.main.async {
                     guard let self, let inspector else { return }
                     self.liveWindows[host] = inspector.windows
+                    self.liveRepositories[host] = inspector.repositories
                 }
             }
             .store(in: &cancellables)
@@ -233,6 +261,12 @@ final class AppState: ObservableObject {
             inspector.stop()
             inspectors.removeValue(forKey: host)
             liveWindows.removeValue(forKey: host)
+            liveRepositories.removeValue(forKey: host)
+        }
+        for (host, probe) in latencyProbes where !liveHosts.contains(host) {
+            probe.stop()
+            latencyProbes.removeValue(forKey: host)
+            latencies.removeValue(forKey: host)
         }
     }
 
@@ -246,6 +280,16 @@ final class AppState: ObservableObject {
     func select(_ window: LiveWindow, on host: String) {
         inspectors[host]?.select(window)
     }
+
+    /// Le dépôt du panneau actif de la session d'un onglet (§9.1).
+    func repository(for session: TerminalSession) -> LiveRepository? {
+        guard let shortcutID = session.shortcutID,
+              let shortcut = store.shortcut(id: shortcutID)
+        else { return nil }
+        return liveRepositories[session.host]?[shortcut.connection.tmuxSession]
+    }
+
+    func latency(on host: String) -> String? { latencies[host] }
 
     /// Installe les hooks sur un hôte, puis rouvre le flux pour que
     /// l'indicateur s'allume sans attendre une reconnexion.

@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Network
 import XCTest
 
 @testable import Latch
@@ -392,5 +393,114 @@ final class MCPServerIntegrationTests: XCTestCase {
         )
         XCTAssertEqual(status, 401)
         XCTAssertTrue(recording.opened.isEmpty)
+    }
+}
+
+// MARK: - Branche git et latence (§9.1)
+
+final class LiveRepositoryTests: XCTestCase {
+
+    private let separator = "\u{1F}"
+
+    func testParsesABranchWithChanges() throws {
+        let repository = try XCTUnwrap(
+            LiveRepository.parse(
+                fields: ["api", "main", " 3 files changed, 12 insertions(+), 3 deletions(-)"]
+            )
+        )
+        XCTAssertEqual(repository.session, "api")
+        XCTAssertEqual(repository.branch, "main")
+        XCTAssertEqual(repository.insertions, 12)
+        XCTAssertEqual(repository.deletions, 3)
+        XCTAssertTrue(repository.isDirty)
+        XCTAssertEqual(repository.summary, "main +12 −3")
+    }
+
+    /// Un dépôt propre n'affiche que sa branche : ni « +0 » ni « −0 ».
+    func testACleanRepositoryShowsOnlyItsBranch() throws {
+        let repository = try XCTUnwrap(LiveRepository.parse(fields: ["api", "main", ""]))
+        XCTAssertFalse(repository.isDirty)
+        XCTAssertEqual(repository.summary, "main")
+    }
+
+    /// `git diff --shortstat` omet la moitié qui vaut zéro.
+    func testHandlesInsertionsOnlyAndDeletionsOnly() throws {
+        let added = try XCTUnwrap(
+            LiveRepository.parse(fields: ["api", "main", " 1 file changed, 5 insertions(+)"])
+        )
+        XCTAssertEqual(added.insertions, 5)
+        XCTAssertEqual(added.deletions, 0)
+        XCTAssertEqual(added.summary, "main +5")
+
+        let removed = try XCTUnwrap(
+            LiveRepository.parse(fields: ["api", "main", " 1 file changed, 2 deletions(-)"])
+        )
+        XCTAssertEqual(removed.summary, "main −2")
+    }
+
+    /// Hors dépôt, la boucle distante ne rend rien : il n'y a pas de branche à
+    /// inventer.
+    func testNoBranchMeansNoRepository() {
+        XCTAssertNil(LiveRepository.parse(fields: ["api", "", ""]))
+        XCTAssertNil(LiveRepository.parse(fields: ["api"]))
+    }
+
+    func testDetachedHeadIsShownAsIs() throws {
+        let repository = try XCTUnwrap(LiveRepository.parse(fields: ["api", "HEAD", ""]))
+        XCTAssertEqual(repository.summary, "HEAD")
+    }
+
+    /// Sur le Mac, tmux est appelé par son chemin absolu : le PATH d'une app
+    /// lancée depuis le Finder ne mène nulle part.
+    func testTheLocalWatchCommandUsesAnAbsoluteTmux() {
+        let command = TmuxInspector.watchCommand(tmux: "'/opt/homebrew/bin/tmux'")
+        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' list-windows -a"), command)
+        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' list-panes -a"), command)
+        XCTAssertFalse(command.contains("; tmux "), "aucun appel par le seul nom")
+    }
+
+    /// La boucle distante ne doit ouvrir qu'une connexion pour tout : fenêtres
+    /// et dépôts arrivent dans le même passage.
+    func testTheWatchCommandAsksForBothInOneGo() {
+        let command = TmuxInspector.watchCommand()
+        XCTAssertTrue(command.contains("tmux list-windows -a"))
+        XCTAssertTrue(command.contains("rev-parse --abbrev-ref HEAD"))
+        XCTAssertTrue(command.contains("diff --shortstat"))
+        // Le panneau actif de la fenêtre active, pas tous les panneaux.
+        XCTAssertTrue(command.contains("#{&&:#{window_active},#{pane_active}}"))
+        // Un chemin à espaces ne doit pas casser le découpage.
+        XCTAssertTrue(command.contains("IFS='\(separator)' read -r s p"))
+    }
+}
+
+@MainActor
+final class LatencyProbeTests: XCTestCase {
+
+    /// La boucle locale répond toujours, et vite.
+    func testMeasuresTheLoopback() async throws {
+        // Un port qui écoute à coup sûr : on en ouvre un pour l'occasion.
+        let listener = try NWListener(using: .tcp, on: 0)
+        listener.newConnectionHandler = { $0.cancel() }
+        listener.start(queue: .global())
+        defer { listener.cancel() }
+
+        try await Task.sleep(for: .milliseconds(200))
+        let port = try XCTUnwrap(listener.port?.rawValue)
+
+        let measured = await LatencyProbe.measure(host: "127.0.0.1", port: port)
+        XCTAssertNotNil(measured)
+        XCTAssertLessThan(try XCTUnwrap(measured), .seconds(1))
+    }
+
+    /// Un hôte injoignable ne rend rien plutôt qu'un zéro qui mentirait.
+    func testAnUnreachableHostYieldsNothing() async {
+        let measured = await LatencyProbe.measure(
+            host: "203.0.113.1", port: 22, timeout: .milliseconds(400)
+        )
+        XCTAssertNil(measured)
+    }
+
+    func testNothingMeasuredMeansNothingShown() {
+        XCTAssertNil(LatencyProbe(host: "billy").label)
     }
 }

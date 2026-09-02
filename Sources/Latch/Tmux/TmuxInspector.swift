@@ -35,39 +35,71 @@ struct LiveWindow: Identifiable, Equatable {
 @MainActor
 final class TmuxInspector: ObservableObject {
 
-    let alias: String
+    /// L'hôte à interroger, ou `nil` pour le Mac : une session locale a des
+    /// fenêtres et un dépôt comme n'importe quelle autre.
+    let alias: String?
 
     /// Les fenêtres par session tmux.
     @Published private(set) var windows: [String: [LiveWindow]] = [:]
+    /// L'état git du panneau actif, par session (§9.1).
+    @Published private(set) var repositories: [String: LiveRepository] = [:]
 
     /// Le séparateur doit être improbable dans un nom de fenêtre — une
     /// tabulation l'est, un espace ne l'est pas.
-    nonisolated private static let separator = "\u{1F}"
+    nonisolated static let separator = "\u{1F}"
     nonisolated private static let recordEnd = "LATCH_END"
+    nonisolated static let gitPrefix = "LATCH_GIT"
 
     /// Une boucle côté serveur plutôt qu'un ssh par sondage : une connexion,
-    /// tenue ouverte, qui réémet la liste régulièrement.
-    nonisolated static func watchCommand(every seconds: Int = 3) -> String {
+    /// tenue ouverte, qui réémet tout régulièrement.
+    ///
+    /// Le même passage relève les fenêtres et l'état git du panneau actif (§9.1) :
+    /// deux questions posées au même endroit au même moment, autant ne pas
+    /// ouvrir deux connexions pour ça.
+    nonisolated static func watchCommand(every seconds: Int = 3, tmux: String = "tmux") -> String {
         let format = [
             "#{session_name}", "#{window_index}", "#{window_name}",
             "#{window_active}", "#{pane_current_command}",
         ].joined(separator: separator)
 
-        return "while :; do tmux list-windows -a -F '\(format)' 2>/dev/null; "
-            + "echo '\(recordEnd)'; sleep \(seconds); done"
+        return "while :; do \(tmux) list-windows -a -F '\(format)' 2>/dev/null; "
+            + gitLoop(tmux: tmux) + "; echo '\(recordEnd)'; sleep \(seconds); done"
+    }
+
+    /// Le dépôt du panneau actif de la fenêtre active : c'est là que le travail
+    /// se fait, et donc celui qui intéresse la barre d'état.
+    ///
+    /// `IFS` prend le séparateur pour que les chemins à espaces survivent au
+    /// `read`, et un répertoire hors dépôt est simplement sauté.
+    nonisolated private static func gitLoop(tmux: String) -> String {
+        let paneFormat = ["#{session_name}", "#{pane_current_path}"].joined(separator: separator)
+        return [
+            "\(tmux) list-panes -a -f '#{&&:#{window_active},#{pane_active}}'",
+            "-F '\(paneFormat)' 2>/dev/null |",
+            "while IFS='\(separator)' read -r s p; do",
+            "b=$(git -C \"$p\" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue;",
+            "d=$(git -C \"$p\" diff --shortstat 2>/dev/null);",
+            "printf '\(gitPrefix)%s\(separator)%s\(separator)%s\\n' \"$s\" \"$b\" \"$d\";",
+            "done",
+        ].joined(separator: " ")
     }
 
     private var process: Process?
     private var buffer = Data()
     private var pending: [LiveWindow] = []
+    private var pendingRepositories: [String: LiveRepository] = [:]
     private var retryTask: Task<Void, Never>?
     private var attempt = 0
     private var isStopped = false
     private let policy = ReconnectionPolicy(base: 2, cap: 30, maxAttempts: .max)
 
-    init(alias: String) {
+    init(alias: String?) {
         self.alias = alias
     }
+
+    /// Le chemin absolu de tmux sur le Mac : le `PATH` d'une app lancée depuis
+    /// le Finder ne mène nulle part (§6, appliqué localement).
+    private var localTmux: String? { LocalTools.path(of: "tmux") }
 
     deinit {
         process?.terminate()
@@ -86,18 +118,27 @@ final class TmuxInspector: ObservableObject {
         process?.terminate()
         process = nil
         windows = [:]
+        repositories = [:]
     }
 
     private func launch() {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        task.arguments = [
-            "-o", "BatchMode=yes",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ConnectTimeout=10",
-            alias,
-            Self.watchCommand(),
-        ]
+        if let alias {
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            task.arguments = [
+                "-o", "BatchMode=yes",
+                "-o", "ServerAliveInterval=30",
+                "-o", "ConnectTimeout=10",
+                alias,
+                Self.watchCommand(),
+            ]
+        } else {
+            // Sans tmux local, il n'y a rien à observer : on n'ouvre pas un
+            // shell pour qu'il échoue en boucle.
+            guard let tmux = localTmux else { return }
+            task.executableURL = URL(fileURLWithPath: "/bin/sh")
+            task.arguments = ["-c", Self.watchCommand(tmux: ShellQuoting.quoted(tmux))]
+        }
 
         let out = Pipe()
         task.standardOutput = out
@@ -127,6 +168,7 @@ final class TmuxInspector: ObservableObject {
         process = nil
         buffer.removeAll()
         pending.removeAll()
+        pendingRepositories.removeAll()
         guard !isStopped else { return }
         scheduleRetry()
     }
@@ -160,9 +202,21 @@ final class TmuxInspector: ObservableObject {
         // clignote pas pendant qu'un lot arrive morceau par morceau.
         if trimmed == Self.recordEnd {
             windows = Dictionary(grouping: pending, by: \.session)
+            repositories = pendingRepositories
             pending.removeAll()
+            pendingRepositories.removeAll()
             return
         }
+
+        if trimmed.hasPrefix(Self.gitPrefix) {
+            let fields = String(trimmed.dropFirst(Self.gitPrefix.count))
+                .components(separatedBy: Self.separator)
+            if let repository = LiveRepository.parse(fields: fields) {
+                pendingRepositories[repository.session] = repository
+            }
+            return
+        }
+
         if let window = Self.parse(line: trimmed) { pending.append(window) }
     }
 
@@ -185,10 +239,18 @@ final class TmuxInspector: ObservableObject {
     /// Bascule la session distante sur cette fenêtre. Le terminal attaché suit
     /// tout seul : c'est tmux qui décide de ce qu'il affiche.
     func select(_ window: LiveWindow) {
-        let command = "tmux select-window -t \(ShellQuoting.quoted(window.target))"
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        task.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, command]
+        if let alias {
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            task.arguments = [
+                "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias,
+                "tmux select-window -t \(ShellQuoting.quoted(window.target))",
+            ]
+        } else {
+            guard let tmux = localTmux else { return }
+            task.executableURL = URL(fileURLWithPath: tmux)
+            task.arguments = ["select-window", "-t", window.target]
+        }
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         try? task.run()

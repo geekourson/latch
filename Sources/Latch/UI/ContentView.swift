@@ -42,6 +42,7 @@ struct ContentView: View {
             }
         }
         .background(Color.latchBackground)
+        .background(WindowChrome())
         .ignoresSafeArea(.container, edges: .top)
         .animation(.easeOut(duration: 0.16), value: app.upgradingTarget)
         .sheet(item: $app.editedShortcut) { shortcut in
@@ -120,8 +121,25 @@ private struct StatusBar: View {
         HStack(spacing: 10) {
             if let session = app.selectedTab {
                 SessionStatus(session: session)
+
                 if let activity = app.claudeActivity(on: session.host) {
                     ClaudeIndicator(activity: activity)
+                }
+
+                // §9.1 : branche git, diff, latence — dans cet ordre, et
+                // seulement quand on les connaît. Un vide vaut mieux qu'un
+                // chiffre inventé.
+                if let repository = app.repository(for: session) {
+                    Label(repository.summary, systemImage: "arrow.triangle.branch")
+                        .labelStyle(StatusLabelStyle())
+                        .foregroundStyle(
+                            repository.isDirty ? Color.latchAccent : Color.latchTextFaint
+                        )
+                }
+
+                if let latency = app.latency(on: session.host) {
+                    Text(latency)
+                        .foregroundStyle(Color.latchTextFaint)
                 }
             } else {
                 Text("aucune session")
@@ -171,6 +189,17 @@ private struct ClaudeIndicator: View {
                     .foregroundStyle(Color.latchTextFaint)
                     .lineLimit(1)
             }
+        }
+    }
+}
+
+/// Une icône minuscule collée à son texte : la barre d'état doit rester
+/// discrète (§9.1).
+private struct StatusLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon.font(.system(size: 9))
+            configuration.title
         }
     }
 }
