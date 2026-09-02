@@ -21,7 +21,7 @@ struct LatchApp: App {
         .defaultSize(width: 1000, height: 640)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Nouvelle session") { app.newShortcut() }
+                Button(localized("Nouvelle session")) { app.newShortcut() }
                     .keyboardShortcut("n")
             }
         }
@@ -30,6 +30,9 @@ struct LatchApp: App {
             SettingsView()
                 .environmentObject(app)
                 .preferredColorScheme(.dark)
+                // Une scène à part : la locale de ContentView ne l'atteint pas.
+                .environment(\.locale, Locale(identifier: app.store.preferences.language.resolved))
+                .id(app.store.preferences.language)
         }
     }
 }

@@ -43,7 +43,11 @@ struct ContentView: View {
         }
         .background(Color.latchBackground)
         .background(WindowChrome())
-        // Changer de langue ne notifie aucune vue : on reconstruit l'arbre.
+        // SwiftUI ne résout pas ses littéraux par `Bundle.localizedString` — le
+        // remplacement de classe ne l'atteint pas. Il choisit la localisation
+        // du bundle d'après la locale de l'environnement : c'est elle qu'il
+        // faut poser, et l'`id` reconstruit l'arbre quand elle change.
+        .environment(\.locale, Locale(identifier: app.store.preferences.language.resolved))
         .id(app.store.preferences.language)
         .ignoresSafeArea(.container, edges: .top)
         .animation(.easeOut(duration: 0.16), value: app.upgradingTarget)
