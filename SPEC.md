@@ -384,6 +384,10 @@ NSWorkspace.shared.notificationCenter.addObserver(
 
 - Barre de titre transparente (`titlebarAppearsTransparent`,
   `titleVisibility = .hidden`), feux de circulation atténués au repos.
+- `~/.ssh/config` n'est **pas** obligatoire : `billy@192.168.1.37` suffit dans le
+  champ « Hôte », et ssh essaie de lui-même les clés par défaut du Mac. Les
+  champs `Port` et `Clé` ne servent qu'aux cas où ces valeurs par défaut ne
+  conviennent pas ; laissés vides, la commande reste celle du §5.
 - L'hôte d'une connexion est un **alias** de `~/.ssh/config`, pas une adresse.
   L'écran du builder affiche donc, sous le champ, où cet alias mène réellement
   (`ssh -G` : utilisateur, hôte, port) et un lien vers le fichier qui en décide.
@@ -524,6 +528,21 @@ session abandonnée et une session qui travaille sans personne.
 Renommer la session tmux d'un raccourci déclenche un `tmux rename-session` sur
 l'hôte plutôt que d'en créer une neuve à côté : le travail suit le raccourci,
 et l'orpheline n'est pas fabriquée.
+
+Retirer un serveur de la barre latérale ne touche à rien sur l'hôte — ni
+sessions, ni clés, ni hooks — et n'exige donc pas d'avoir rangé ses orphelines
+d'abord.
+
+### Fenêtres déclarées
+
+Les fenêtres d'un raccourci décrivent ce que la session **doit** avoir. À chaque
+connexion, celles qui manquent sont créées, par nom ; les autres sont laissées
+telles quelles, et aucune n'est jamais fermée. Les créer seulement à la création
+de la session rendait la section inutilisable : en ajouter une à un raccourci
+déjà utilisé ne produisait rien.
+
+Dans la barre latérale, une fenêtre se renomme, se ferme et se double sur place :
+tmux est la source de vérité, l'app n'en est que la télécommande.
 
 ## 11. Sécurité
 

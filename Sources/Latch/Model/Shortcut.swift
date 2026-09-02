@@ -41,8 +41,15 @@ struct Preflight: Codable, Identifiable, Equatable {
 
 struct Connection: Codable, Equatable {
     var transport: Transport = .mosh
-    /// Alias `~/.ssh/config` de préférence.
+    /// La destination ssh : un alias de `~/.ssh/config`, ou directement
+    /// `utilisateur@adresse`. Le fichier de configuration n'est **pas**
+    /// obligatoire — ssh essaie de lui-même les clés par défaut du Mac.
     var host: String
+    /// Port ssh, quand ce n'est pas 22. `nil` laisse ssh décider, donc le
+    /// fichier de configuration s'il en dit quelque chose.
+    var port: Int?
+    /// Clé privée à utiliser, quand les clés par défaut ne conviennent pas.
+    var identityFile: String?
     /// `-J`, seulement si `transport == .sshJump`.
     var jumpHost: String?
     /// « api »

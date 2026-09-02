@@ -98,8 +98,11 @@ struct MoshDriver: ConnectionDriver {
             "\(server) new -s -c 256 -l LANG=\(remoteLocale) -- " + remote
         )
 
+        let fragment = SSHOptions(shortcut.connection).commandLineFragment
+        let options = fragment.isEmpty ? "" : " " + fragment
+
         let steps = [
-            "_latch=$(ssh \(host) -- \(serverCommand) | tr -d '\\r' | grep -m1 '^MOSH CONNECT ')",
+            "_latch=$(ssh\(options) \(host) -- \(serverCommand) | tr -d '\\r' | grep -m1 '^MOSH CONNECT ')",
             "[ -n \"$_latch\" ] || { echo 'latch: mosh-server n'\\''a pas répondu sur cet hôte.' >&2; exit 1; }",
             "_latch_port=${_latch#MOSH CONNECT }",
             "_latch_key=${_latch_port#* }",

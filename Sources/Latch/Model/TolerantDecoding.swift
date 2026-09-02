@@ -105,14 +105,16 @@ extension Preflight {
 
 extension Connection {
     enum CodingKeys: String, CodingKey {
-        case transport, host, jumpHost, tmuxSession, workingDirectory
-        case initialCommand, extraArgs, keepShellOnExit, controlMode
+        case transport, host, port, identityFile, jumpHost, tmuxSession
+        case workingDirectory, initialCommand, extraArgs, keepShellOnExit, controlMode
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         transport = container.value(.transport, or: .mosh)
         host = container.value(.host, or: "")
+        port = container.optional(.port)
+        identityFile = container.optional(.identityFile)
         jumpHost = container.optional(.jumpHost)
         tmuxSession = container.value(.tmuxSession, or: "session")
         workingDirectory = container.optional(.workingDirectory)

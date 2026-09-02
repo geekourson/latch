@@ -61,6 +61,10 @@ final class MCPServer {
 
     var isRunning: Bool { listener != nil }
 
+    /// Vrai quand le port est connu : avec un port choisi par le système, il ne
+    /// l'est qu'une fois l'écoute établie.
+    var isListening: Bool { listener?.state == .ready && port != 0 }
+
     /// La commande à lancer **sur le serveur** pour déclarer Latch à Claude Code.
     var claudeRegistrationCommand: String {
         "claude mcp add --transport http latch http://127.0.0.1:\(port)/mcp "
@@ -74,16 +78,31 @@ final class MCPServer {
 
     // MARK: - Cycle de vie
 
+    /// Démarre sur le port demandé ; si celui-ci est déjà pris — une autre
+    /// instance de Latch, un autre programme — on laisse le système en choisir
+    /// un. Le `-R` et la commande `claude mcp add` lisent `port`, donc les deux
+    /// bouts restent d'accord quel qu'il soit.
     func start() {
         guard listener == nil else { return }
+        if !listen(on: port), port != 0 {
+            NSLog("Latch: le port MCP %d est occupé, on en prend un autre", Int(port))
+            _ = listen(on: 0)
+        }
+    }
+
+    private func listen(on requested: UInt16) -> Bool {
         do {
             let parameters = NWParameters.tcp
+            parameters.allowLocalEndpointReuse = true
             // Localhost uniquement : le tunnel ssh se charge d'y amener le
             // serveur, rien n'a à venir du réseau.
-            parameters.requiredLocalEndpoint = NWEndpoint.hostPort(
-                host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!
-            )
-            parameters.allowLocalEndpointReuse = true
+            if requested != 0, let endpointPort = NWEndpoint.Port(rawValue: requested) {
+                parameters.requiredLocalEndpoint = NWEndpoint.hostPort(
+                    host: "127.0.0.1", port: endpointPort
+                )
+            } else {
+                parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
+            }
 
             let listener = try NWListener(using: parameters)
             listener.newConnectionHandler = { [weak self] connection in
@@ -91,10 +110,16 @@ final class MCPServer {
                 connection.start(queue: self.queue)
                 self.receive(on: connection, accumulated: Data())
             }
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
+                guard case .ready = state, let chosen = listener?.port?.rawValue else { return }
+                Task { @MainActor in self?.port = chosen }
+            }
             listener.start(queue: queue)
             self.listener = listener
+            return true
         } catch {
-            NSLog("Latch: le serveur MCP n'a pas pu démarrer — \(error.localizedDescription)")
+            NSLog("Latch: le serveur MCP n'a pas pu démarrer — %@", error.localizedDescription)
+            return false
         }
     }
 

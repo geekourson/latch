@@ -152,6 +152,7 @@ final class AppState: ObservableObject {
             tabs.append(session)
             selectedTabID = session.id
             followHooks(on: shortcut.connection.host)
+            reconcileWindows(of: shortcut)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -279,6 +280,39 @@ final class AppState: ObservableObject {
         (liveWindows[host]?[session] ?? []).sorted { $0.index < $1.index }
     }
 
+    /// Crée les fenêtres déclarées qui manquent encore. Attend d'avoir vu la
+    /// session : l'inspecteur met un tour de boucle à la découvrir.
+    private func reconcileWindows(of shortcut: Shortcut) {
+        guard !shortcut.windows.isEmpty else { return }
+        let host = shortcut.connection.host
+        let session = shortcut.connection.tmuxSession
+
+        Task { [weak self] in
+            for _ in 0..<10 {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self, let inspector = self.inspectors[host] else { return }
+                if inspector.windows[session] != nil {
+                    inspector.reconcile(shortcut.windows, inSession: session)
+                    return
+                }
+            }
+        }
+    }
+
+    func renameWindow(_ window: LiveWindow, to name: String, on host: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        inspectors[host]?.renameWindow(window, to: trimmed)
+    }
+
+    func newWindow(inSession session: String, on host: String) {
+        inspectors[host]?.newWindow(inSession: session)
+    }
+
+    func closeWindow(_ window: LiveWindow, on host: String) {
+        inspectors[host]?.killWindow(window)
+    }
+
     /// Bascule la session distante sur cette fenêtre. Le terminal suit tout
     /// seul : c'est tmux qui décide de ce qu'il affiche.
     func select(_ window: LiveWindow, on host: String) {
@@ -318,6 +352,18 @@ final class AppState: ObservableObject {
     /// ne peuvent pas ouvrir de connexion ssh.
     func setLiveSessionsForTesting(_ sessions: [LiveSession], on host: String) {
         liveSessions[host] = sessions
+    }
+
+    /// Retire un serveur de la barre latérale. Ne touche **rien** sur l'hôte :
+    /// ni les sessions tmux — orphelines comprises — ni les clés, ni les hooks.
+    func removeServer(_ server: Server, withShortcuts: Bool) {
+        if withShortcuts {
+            for shortcut in store.shortcuts(for: server) {
+                tabs.filter { $0.shortcutID == shortcut.id }.forEach { close(tabID: $0.id) }
+                store.remove(shortcutID: shortcut.id)
+            }
+        }
+        store.remove(serverID: server.id)
     }
 
     /// Ferme une session sur l'hôte. Toujours à la demande explicite.

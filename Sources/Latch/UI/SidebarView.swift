@@ -72,6 +72,27 @@ private struct ServerSection: View {
     @EnvironmentObject private var app: AppState
     let server: Server
 
+    @State private var confirmsRemoval = false
+
+    private var shortcutCount: Int { app.store.shortcuts(for: server).count }
+
+    /// Retirer un serveur ne touche **rien** sur la machine distante : ni les
+    /// sessions tmux, ni les clés, ni les hooks. C'est une entrée de la barre
+    /// latérale qui disparaît, et rien d'autre — les orphelines n'ont donc pas
+    /// à être rangées avant.
+    private var removalExplanation: String {
+        var parts = ["Rien n'est touché sur l'hôte : les sessions tmux, les clés et les hooks restent en place."]
+        let orphans = app.orphanSessions(on: server.sshAlias).count
+        if orphans > 0 {
+            parts.append("Ses \(orphans) session(s) sans raccourci ne sont pas fermées.")
+        }
+        if shortcutCount > 0 {
+            parts.append("Ses \(shortcutCount) raccourci(s) peuvent être gardés ou retirés avec lui.")
+        }
+        parts.append("Un serveur retiré revient dès qu'un raccourci le désigne à nouveau.")
+        return parts.joined(separator: " ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 7) {
@@ -110,6 +131,25 @@ private struct ServerSection: View {
                 Button("Améliorer cet hôte…") { app.upgradingTarget = .server(server) }
                 Divider()
                 Button("Nouvelle session ici") { app.newShortcut(host: server.sshAlias) }
+                Divider()
+                Button("Retirer ce serveur…", role: .destructive) { confirmsRemoval = true }
+            }
+            .confirmationDialog(
+                "Retirer « \(server.name) » de la barre latérale ?",
+                isPresented: $confirmsRemoval,
+                titleVisibility: .visible
+            ) {
+                if shortcutCount > 0 {
+                    Button("Retirer avec ses \(shortcutCount) raccourci(s)", role: .destructive) {
+                        app.removeServer(server, withShortcuts: true)
+                    }
+                }
+                Button("Retirer le serveur seul") {
+                    app.removeServer(server, withShortcuts: false)
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text(removalExplanation)
             }
 
             ForEach(app.store.shortcuts(for: server)) { shortcut in
@@ -192,30 +232,70 @@ private struct WindowRow: View {
     let window: LiveWindow
     let host: String
 
+    @State private var isRenaming = false
+    @State private var newName = ""
+    @State private var confirmsClosing = false
+
     var body: some View {
-        Button {
-            app.select(window, on: host)
-        } label: {
-            HStack(spacing: 5) {
-                Text("\(window.index)")
-                    .foregroundStyle(Color.latchTextFaint)
+        HStack(spacing: 5) {
+            Text("\(window.index)")
+                .foregroundStyle(Color.latchTextFaint)
+
+            if isRenaming {
+                TextField("nom", text: $newName)
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(Color.latchText)
+                    .onSubmit { commitRename() }
+            } else {
                 Text(window.name)
                     .foregroundStyle(window.isActive ? Color.latchText : Color.latchTextDim)
                     .lineLimit(1)
-                Spacer(minLength: 0)
+                    .layoutPriority(1)
+                Spacer(minLength: 4)
                 if let command = window.currentCommand, command != window.name {
                     Text(command)
                         .foregroundStyle(Color.latchTextFaint)
                         .lineLimit(1)
+                        .layoutPriority(0)
                 }
             }
-            .font(.system(size: 10.5, design: .monospaced))
-            .padding(.leading, 28)
-            .padding(.trailing, 6)
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .font(.system(size: 10.5, design: .monospaced))
+        .padding(.leading, 28)
+        .padding(.trailing, 6)
+        // Une cible cliquable de deux pixels de haut n'est pas cliquable.
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(window.isActive ? Color.latchSurface : .clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture { if !isRenaming { app.select(window, on: host) } }
+        .contextMenu {
+            Button("Renommer…") {
+                newName = window.name
+                isRenaming = true
+            }
+            Button("Nouvelle fenêtre ici") { app.newWindow(inSession: window.session, on: host) }
+            Divider()
+            Button("Fermer la fenêtre…", role: .destructive) { confirmsClosing = true }
+        }
+        .confirmationDialog(
+            "Fermer la fenêtre « \(window.name) » ?",
+            isPresented: $confirmsClosing,
+            titleVisibility: .visible
+        ) {
+            Button("Fermer", role: .destructive) { app.closeWindow(window, on: host) }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Ce qui y tourne sera interrompu.")
+        }
+    }
+
+    private func commitRename() {
+        app.renameWindow(window, to: newName, on: host)
+        isRenaming = false
     }
 }
 
@@ -233,12 +313,17 @@ private struct OrphanRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            // Le nom passe avant l'âge : c'est lui qui permet de reconnaître la
+            // session, et 180 px ne suffisent pas toujours aux deux.
             Text(session.name)
                 .foregroundStyle(Color.latchTextFaint)
                 .lineLimit(1)
-            Spacer(minLength: 0)
-            Text(session.age)
+                .layoutPriority(1)
+            Spacer(minLength: 4)
+            Text(session.shortAge)
                 .foregroundStyle(Color.latchTextFaint.opacity(0.7))
+                .lineLimit(1)
+                .layoutPriority(0)
         }
         .font(.system(size: 10.5, design: .monospaced))
         .italic()

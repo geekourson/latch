@@ -335,3 +335,73 @@ final class LocalToolsTests: XCTestCase {
         XCTAssertEqual(plan.command, "/opt/homebrew/bin/tmux new -A -s notes")
     }
 }
+
+// MARK: - Sans ~/.ssh/config (§4 : « de préférence », pas « obligatoirement »)
+
+final class SSHOptionsTests: XCTestCase {
+
+    /// Le cas nominal : rien de renseigné, la commande reste celle du §5 et ssh
+    /// essaie tout seul les clés par défaut du Mac.
+    func testNothingSpecifiedChangesNothing() throws {
+        XCTAssertTrue(SSHOptions.none.isEmpty)
+        XCTAssertEqual(SSHOptions.none.arguments, [])
+        XCTAssertNil(SSHOptions.none.moshArgument)
+
+        var direct = shortcut(transport: .ssh, host: "billy@192.168.1.37")
+        direct.connection.tmuxSession = "api"
+        XCTAssertEqual(
+            try CommandBuilder.build(direct),
+            #"ssh -t billy@192.168.1.37 "tmux new -A -s api""#
+        )
+    }
+
+    func testPortAndKeyReachTheCommandLine() throws {
+        var custom = shortcut(transport: .ssh, host: "billy@192.168.1.37")
+        custom.connection.port = 2222
+        custom.connection.identityFile = "/Users/billy/.ssh/id_serveur"
+
+        let command = try CommandBuilder.build(custom)
+        XCTAssertTrue(command.hasPrefix("ssh -t -p 2222 -i /Users/billy/.ssh/id_serveur"), command)
+        // Nommer une clé veut dire celle-là et pas une autre.
+        XCTAssertTrue(command.contains("-o IdentitiesOnly=yes"), command)
+    }
+
+    /// Le tilde est développé ici : ssh l'accepte, mais la commande traverse un
+    /// shell qui pourrait le laisser passer entre guillemets.
+    func testTheKeyPathIsExpanded() {
+        let options = SSHOptions(port: nil, identityFile: "~/.ssh/id_serveur")
+        XCTAssertTrue(options.arguments.contains(NSHomeDirectory() + "/.ssh/id_serveur"))
+    }
+
+    /// mosh ne comprend ni `-p` ni `-i` : il les passe au ssh qu'il ouvre.
+    func testMoshForwardsThemThroughItsOwnSSH() throws {
+        var custom = shortcut(transport: .mosh, host: "billy@192.168.1.37", session: "dev")
+        custom.connection.port = 2222
+
+        let command = try CommandBuilder.build(custom)
+        XCTAssertEqual(
+            command,
+            "mosh '--ssh=ssh -p 2222' billy@192.168.1.37 -- tmux new -A -s dev"
+        )
+    }
+
+    /// Un port hors bornes est ignoré plutôt que d'être passé tel quel à ssh.
+    func testAnImpossiblePortIsDropped() {
+        XCTAssertNil(SSHOptions(port: 0).port)
+        XCTAssertNil(SSHOptions(port: 99_999).port)
+        XCTAssertEqual(SSHOptions(port: 2222).port, 2222)
+    }
+
+    func testBlankKeyIsTreatedAsAbsent() {
+        XCTAssertTrue(SSHOptions(identityFile: "   ").isEmpty)
+        XCTAssertTrue(SSHOptions(identityFile: "").isEmpty)
+    }
+
+    /// Le repli en shell nu garde le port et la clé : sans eux il ne joindrait
+    /// pas l'hôte du tout.
+    func testTheBareShellFallbackKeepsThem() {
+        var connection = Connection(transport: .ssh, host: "billy", tmuxSession: "api")
+        connection.port = 2222
+        XCTAssertEqual(CommandBuilder.bareShellCommand(connection), "ssh -t -p 2222 billy")
+    }
+}

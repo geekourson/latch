@@ -96,6 +96,10 @@ enum CommandBuilder {
             connection, windows: shortcut.windows, toolPaths: toolPaths
         )
         let host = ShellQuoting.quoted(connection.host)
+        // Port et clé ne servent qu'aux cas où les valeurs par défaut de ssh ne
+        // conviennent pas : sans eux, la commande reste celle du §5.
+        let fragment = SSHOptions(connection).commandLineFragment
+        let options = fragment.isEmpty ? "" : " " + fragment
 
         switch connection.transport {
         case .local:
@@ -106,18 +110,21 @@ enum CommandBuilder {
             // `-t` est indispensable : sans allocation de TTY, tmux refuse de
             // démarrer. La commande distante passe par le shell de connexion,
             // qui développe `~` et `$SHELL`.
-            return "ssh -t \(host) \(ShellQuoting.doubleQuoted(remote))"
+            return "ssh -t\(options) \(host) \(ShellQuoting.doubleQuoted(remote))"
 
         case .sshJump:
             let jump = ShellQuoting.quoted(connection.jumpHost ?? "")
-            return "ssh -t -J \(jump) \(host) \(ShellQuoting.doubleQuoted(remote))"
+            return "ssh -t\(options) -J \(jump) \(host) \(ShellQuoting.doubleQuoted(remote))"
 
         case .eternalTerminal:
             return "et \(host) -c \(ShellQuoting.doubleQuoted(remote))"
 
         case .mosh:
-            // mosh sépare ses arguments de la commande distante par `--`.
-            return "\(ShellQuoting.quoted(moshBinary)) \(host) -- "
+            // mosh ne comprend ni `-p` ni `-i` : il les passe au ssh qu'il
+            // ouvre pour démarrer mosh-server, via `--ssh`.
+            let mosh = SSHOptions(connection).moshArgument
+                .map { " " + ShellQuoting.quoted($0) } ?? ""
+            return "\(ShellQuoting.quoted(moshBinary))\(mosh) \(host) -- "
                 + remoteInvocation(connection, remote: remote)
         }
     }
@@ -154,15 +161,18 @@ enum CommandBuilder {
     /// contraire ne ferait qu'égarer l'utilisateur.
     static func bareShellCommand(_ connection: Connection) -> String {
         let host = ShellQuoting.quoted(connection.host)
+        let fragment = SSHOptions(connection).commandLineFragment
+        let options = fragment.isEmpty ? "" : " " + fragment
+
         switch connection.transport {
         case .local:
             return "exec $SHELL"
         case .eternalTerminal:
             return "et \(host)"
         case .sshJump:
-            return "ssh -t -J \(ShellQuoting.quoted(connection.jumpHost ?? "")) \(host)"
+            return "ssh -t\(options) -J \(ShellQuoting.quoted(connection.jumpHost ?? "")) \(host)"
         case .ssh, .mosh:
-            return "ssh -t \(host)"
+            return "ssh -t\(options) \(host)"
         }
     }
 

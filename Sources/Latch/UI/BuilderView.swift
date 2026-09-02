@@ -171,8 +171,9 @@ struct BuilderView: View {
             }
         } header: {
             SectionTitle("Fenêtres")
-            Text("Créées à la première connexion seulement — aux suivantes, "
-                + "tmux réattache la session telle qu'elle est.")
+            Text("Les fenêtres tmux que cette session doit avoir. À chaque "
+                + "connexion, celles qui manquent sont créées ; les autres sont "
+                + "laissées telles quelles, et rien n'est jamais fermé.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color.latchTextFaint)
                 .textCase(nil)
@@ -267,8 +268,30 @@ private struct ConnectionFields: View {
             .controlSize(.small)
 
             if connection.transport.isRemote {
-                Field("Hôte", placeholder: "alias ~/.ssh/config", text: $connection.host)
+                Field(
+                    "Hôte",
+                    placeholder: "billy@192.168.1.37 ou un alias ~/.ssh/config",
+                    text: $connection.host
+                )
                 ResolvedHost(alias: connection.host)
+
+                Field(
+                    "Port",
+                    placeholder: "22",
+                    text: Binding(
+                        get: { connection.port.map(String.init) ?? "" },
+                        set: { connection.port = Int($0.filter(\.isNumber)) }
+                    )
+                )
+
+                Field(
+                    "Clé",
+                    placeholder: "clés par défaut du Mac",
+                    text: Binding(
+                        get: { connection.identityFile ?? "" },
+                        set: { connection.identityFile = $0.isEmpty ? nil : $0 }
+                    )
+                )
             }
 
             if connection.transport == .sshJump {
@@ -411,9 +434,13 @@ private struct ResolvedHost: View {
         var description = hostName
         if let user { description = "\(user)@\(description)" }
         if port != "22" { description += ":\(port)" }
-        // Un alias inconnu de ssh se résout en lui-même : ne rien dire vaut
-        // mieux que faire croire à une configuration qui n'existe pas.
-        return hostName == trimmed ? nil : description
+        // Une adresse tapée directement se résout en elle-même : ce n'est pas
+        // une configuration, c'est ce qu'on a écrit. On le dit quand même, avec
+        // la clé que ssh choisira — c'est toute la question que pose le champ.
+        if hostName == trimmed || "\(user ?? "")@\(hostName)" == trimmed {
+            return description + " · clés par défaut du Mac"
+        }
+        return description + " · ~/.ssh/config"
     }
 }
 

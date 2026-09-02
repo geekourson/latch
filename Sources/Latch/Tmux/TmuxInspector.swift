@@ -50,6 +50,18 @@ struct LiveSession: Identifiable, Equatable {
         }
     }
 
+    /// La même chose en deux caractères : la barre latérale fait 180 px, et le
+    /// nom de la session compte plus que son âge.
+    var shortAge: String {
+        let seconds = Date().timeIntervalSince(created)
+        switch seconds {
+        case ..<90: return "maintenant"
+        case ..<3600: return "\(Int(seconds / 60)) min"
+        case ..<86400: return "\(Int(seconds / 3600)) h"
+        default: return "\(Int(seconds / 86400)) j"
+        }
+    }
+
     var summary: String {
         let windows = windowCount == 1 ? "1 fenêtre" : "\(windowCount) fenêtres"
         return "\(windows), \(age)"
@@ -296,6 +308,39 @@ final class TmuxInspector: ObservableObject {
     }
 
     // MARK: Action
+
+    /// Crée les fenêtres déclarées qui manquent, et **seulement** celles-là.
+    ///
+    /// Les créer depuis la commande de session ne les faisait naître qu'à la
+    /// première connexion : ajouter une fenêtre à un raccourci déjà utilisé ne
+    /// produisait rien, ce qui rendait la section incompréhensible. On
+    /// rapproche donc le déclaré du réel à chaque connexion — par nom, ce qui
+    /// est idempotent et ne duplique jamais.
+    func reconcile(_ declared: [TmuxWindow], inSession session: String) {
+        guard !declared.isEmpty, windows[session] != nil else { return }
+        let existing = Set((windows[session] ?? []).map(\.name))
+
+        for window in declared where !existing.contains(window.name) {
+            let name = window.name.trimmingCharacters(in: .whitespaces)
+            let command = window.command.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !command.isEmpty else { continue }
+            run(["new-window", "-d", "-t", session + ":", "-n", name, command])
+        }
+    }
+
+    /// Renomme une fenêtre. tmux ne la renomme pas tout seul quand un raccourci
+    /// change : c'est une action de l'utilisateur.
+    func renameWindow(_ window: LiveWindow, to name: String) {
+        run(["rename-window", "-t", window.target, name])
+    }
+
+    func newWindow(inSession session: String) {
+        run(["new-window", "-t", session + ":"])
+    }
+
+    func killWindow(_ window: LiveWindow) {
+        run(["kill-window", "-t", window.target])
+    }
 
     /// Renomme une session sur l'hôte. C'est ce qui évite de fabriquer une
     /// orpheline quand un raccourci change de nom : le travail suit.

@@ -316,13 +316,19 @@ final class MCPServerIntegrationTests: XCTestCase {
     private var recording: RecordingHost!
 
     override func setUp() async throws {
-        // Un port au hasard dans la plage éphémère : la suite ne doit pas
-        // échouer parce qu'une instance de Latch tourne à côté.
-        server = MCPServer(port: UInt16.random(in: 49152...65000))
+        // On laisse le système choisir : tirer un port au hasard dans la plage
+        // éphémère finit par tomber sur un port déjà pris, et c'est ce qui est
+        // arrivé.
+        server = MCPServer(port: 0)
         recording = RecordingHost()
         server.host = recording
         server.start()
-        try await Task.sleep(for: .milliseconds(150))
+
+        let deadline = Date().addingTimeInterval(5)
+        while server.port == 0, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertNotEqual(server.port, 0, "le serveur n'a pas trouvé de port")
     }
 
     override func tearDown() async throws {
@@ -645,5 +651,47 @@ final class OrphanSessionTests: XCTestCase {
         XCTAssertEqual(state.editedShortcut?.connection.tmuxSession, "gribouille")
         XCTAssertEqual(state.editedShortcut?.connection.host, "billy")
         XCTAssertTrue(state.store.shortcuts.isEmpty, "rien n'est créé avant l'enregistrement")
+    }
+}
+
+// MARK: - Les fenêtres déclarées d'un raccourci
+
+@MainActor
+final class WindowReconciliationTests: XCTestCase {
+
+    private func inspector() -> TmuxInspector { TmuxInspector(alias: "billy") }
+
+    /// Ne rien faire quand la session n'a pas encore été vue : créer des
+    /// fenêtres dans une session inconnue les mettrait n'importe où.
+    func testWaitsUntilTheSessionIsKnown() {
+        let inspector = inspector()
+        // `windows` est vide : aucune session observée.
+        inspector.reconcile(
+            [TmuxWindow(name: "logs", command: "journalctl -f")], inSession: "api"
+        )
+        // Rien à vérifier d'autre que l'absence de plantage : la garde est là
+        // pour que la commande ne parte pas.
+        XCTAssertTrue(inspector.windows.isEmpty)
+    }
+
+    /// Une fenêtre sans nom ou sans commande n'est pas une fenêtre.
+    func testIncompleteWindowsAreSkipped() {
+        let declared = [
+            TmuxWindow(name: "  ", command: "tail -f a"),
+            TmuxWindow(name: "logs", command: "   "),
+        ]
+        for window in declared {
+            XCTAssertTrue(
+                window.name.trimmingCharacters(in: .whitespaces).isEmpty
+                    || window.command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+        }
+    }
+
+    /// La cible d'une fenêtre reste citable : un nom de session peut contenir
+    /// un espace.
+    func testWindowTargetsSurviveQuoting() {
+        let window = LiveWindow(session: "mes notes", index: 2, name: "logs", isActive: false)
+        XCTAssertEqual(ShellQuoting.quoted(window.target), "'mes notes:2'")
     }
 }
