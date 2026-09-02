@@ -129,6 +129,57 @@ enum HookInstaller {
             + "tail -n0 -F ~/.latch/events.jsonl"
     }
 
+    // MARK: - Exécution depuis l'app
+
+    /// Le §10 veut le script « exécuté depuis l'app avec confirmation
+    /// explicite de l'utilisateur ». C'est possible sans rien demander de plus
+    /// que la clé ssh : contrairement aux paquets du §6, l'installation des
+    /// hooks n'écrit que dans le dossier personnel — `~/.latch/` et
+    /// `~/.claude/settings.json`. Aucun `sudo`, donc aucun mot de passe.
+    enum InstallError: LocalizedError {
+        case failed(status: Int32, output: String)
+
+        var errorDescription: String? {
+            guard case .failed(let status, let output) = self else { return nil }
+            let detail = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            return detail.isEmpty
+                ? "L'installation a échoué (code \(status))."
+                : detail
+        }
+    }
+
+    @discardableResult
+    static func install(on alias: String) async throws -> String {
+        try await run(installCommand, on: alias)
+    }
+
+    /// Les hooks sont-ils déjà en place ? Un aller-retour, sans rien modifier.
+    static func isInstalled(on alias: String) async -> Bool {
+        let check = "test -x ~/.latch/hook.sh && grep -q '.latch/hook.sh' ~/.claude/settings.json"
+        return (try? await run(check, on: alias)) != nil
+    }
+
+    private static func run(_ command: String, on alias: String) async throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, command]
+
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        process.standardInput = FileHandle.nullDevice
+
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let text = String(decoding: data, as: UTF8.self)
+        guard process.terminationStatus == 0 else {
+            throw InstallError.failed(status: process.terminationStatus, output: text)
+        }
+        return text
+    }
+
     static let uninstallHint =
         "Pour désinstaller : supprime ~/.latch/hook.sh et les entrées "
         + "correspondantes dans ~/.claude/settings.json. Latch en garde une "

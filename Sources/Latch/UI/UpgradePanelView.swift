@@ -19,6 +19,9 @@ struct UpgradePanelView: View {
 
     @State private var freeformCommand = ""
     @State private var showsHookScript = false
+    @State private var confirmsHookInstall = false
+    @State private var isInstallingHooks = false
+    @State private var hookInstallResult: String?
 
     private var plan: UpgradePlan {
         ServerUpgradePlanner.plan(for: server.probe)
@@ -43,6 +46,7 @@ struct UpgradePanelView: View {
                     if let claude = plan.claudeCommand {
                         claudeBlock(claude)
                     }
+                    offPathBlock
                     hooksBlock
                     localMoshBlock
                     pathHint
@@ -196,6 +200,38 @@ struct UpgradePanelView: View {
         }
     }
 
+    // MARK: Outils hors PATH — le piège du §6, en vrai
+
+    /// Un outil installé mais invisible d'un shell non interactif. Latch
+    /// l'appelle par son chemin absolu, donc tout marche — mais il vaut mieux
+    /// le dire, parce que tout le reste (scripts, cron, autres outils) butera
+    /// dessus.
+    @ViewBuilder
+    private var offPathBlock: some View {
+        if !plan.offPathTools.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Installés, mais hors du PATH", systemImage: "arrow.triangle.branch")
+                    .labelStyle(SectionLabelStyle())
+
+                ForEach(plan.offPathTools.sorted(by: { $0.key < $1.key }), id: \.key) { tool, path in
+                    Text("\(tool) → \(path)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(Color.latchText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text("Latch les appelle par leur chemin absolu, donc tes "
+                    + "sessions fonctionnent. Mais un shell non interactif ne "
+                    + "les trouve pas : déplace le PATH de ~/.bashrc vers "
+                    + "~/.profile ou ~/.zshenv pour que tout le reste les voie "
+                    + "aussi.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchTextDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
     // MARK: Hooks Claude Code (§10)
 
     /// Rien n'est installé en silence, et ce qui sera exécuté est montré en
@@ -227,12 +263,65 @@ struct UpgradePanelView: View {
                 .foregroundStyle(Color.latchTextFaint)
                 .fixedSize(horizontal: false, vertical: true)
 
-            actions(for: HookInstaller.installCommand)
+            HStack(spacing: 8) {
+                // Contrairement aux paquets du §6, ça n'écrit que dans le
+                // dossier personnel : pas de sudo, donc l'app peut le faire
+                // elle-même — après confirmation explicite, comme le veut le §10.
+                Button(isInstallingHooks ? "Installation…" : "Installer") {
+                    confirmsHookInstall = true
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.latchClaude)
+                .controlSize(.small)
+                .disabled(isInstallingHooks)
+
+                Button("Copier la commande") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(HookInstaller.installCommand, forType: .string)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Spacer()
+            }
+            .font(.system(size: 11))
+            .confirmationDialog(
+                "Installer les hooks sur \(server.sshAlias) ?",
+                isPresented: $confirmsHookInstall,
+                titleVisibility: .visible
+            ) {
+                Button("Installer") { installHooks() }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Latch écrira ~/.latch/hook.sh et ajoutera ses entrées à "
+                    + "~/.claude/settings.json, dont une copie sera mise de côté. "
+                    + "Rien d'autre n'est touché, et aucun sudo n'est demandé.")
+            }
+
+            if let hookInstallResult {
+                Text(hookInstallResult)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundStyle(Color.latchTextDim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Text(HookInstaller.uninstallHint)
                 .font(.system(size: 10))
                 .foregroundStyle(Color.latchTextFaint)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func installHooks() {
+        isInstallingHooks = true
+        hookInstallResult = nil
+        Task {
+            switch await app.installHooks(on: server.sshAlias) {
+            case .success(let output):
+                hookInstallResult = output.isEmpty ? "latch: hooks installés." : output
+            case .failure(let error):
+                hookInstallResult = error.localizedDescription
+            }
+            isInstallingHooks = false
         }
     }
 

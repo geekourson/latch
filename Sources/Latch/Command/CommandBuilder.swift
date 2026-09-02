@@ -48,7 +48,8 @@ enum CommandBuilder {
     static func build(
         _ shortcut: Shortcut,
         degradation: Degradation = .none,
-        moshBinary: String = "mosh"
+        moshBinary: String = "mosh",
+        toolPaths: [String: String] = [:]
     ) throws -> String {
         if let custom = shortcut.customCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
            !custom.isEmpty {
@@ -59,7 +60,7 @@ enum CommandBuilder {
         guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
 
         let connection = try connectionCommand(
-            shortcut, degradation: degradation, moshBinary: moshBinary
+            shortcut, degradation: degradation, moshBinary: moshBinary, toolPaths: toolPaths
         )
         let steps = shortcut.preflight.map(preflightCommand) + [connection]
         return steps.joined(separator: " && ")
@@ -72,7 +73,8 @@ enum CommandBuilder {
     static func connectionCommand(
         _ shortcut: Shortcut,
         degradation: Degradation = .none,
-        moshBinary: String = "mosh"
+        moshBinary: String = "mosh",
+        toolPaths: [String: String] = [:]
     ) throws -> String {
         let issues = validate(shortcut)
         guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
@@ -90,7 +92,9 @@ enum CommandBuilder {
             return bareShellCommand(connection)
         }
 
-        let remote = tmuxInvocation(connection, windows: shortcut.windows)
+        let remote = tmuxInvocation(
+            connection, windows: shortcut.windows, toolPaths: toolPaths
+        )
         let host = ShellQuoting.quoted(connection.host)
 
         switch connection.transport {
@@ -126,13 +130,15 @@ enum CommandBuilder {
     /// l'autre côté — et le shell local, lui, le développerait avec *son*
     /// répertoire personnel. D'où le `sh -c` explicite dans ce cas, et
     /// seulement dans ce cas.
-    static func remoteInvocation(_ shortcut: Shortcut) throws -> String {
+    static func remoteInvocation(
+        _ shortcut: Shortcut, toolPaths: [String: String] = [:]
+    ) throws -> String {
         let issues = validate(shortcut)
         guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
         let connection = shortcut.connection
         return remoteInvocation(
             connection,
-            remote: tmuxInvocation(connection, windows: shortcut.windows)
+            remote: tmuxInvocation(connection, windows: shortcut.windows, toolPaths: toolPaths)
         )
     }
 
@@ -163,8 +169,12 @@ enum CommandBuilder {
     // MARK: Préfixe tmux
 
     /// `tmux [-CC] new -A -s <session> [-c <dir>] ['<commande>']`
-    static func tmuxInvocation(_ connection: Connection, windows: [TmuxWindow]) -> String {
-        var parts = ["tmux"]
+    static func tmuxInvocation(
+        _ connection: Connection,
+        windows: [TmuxWindow],
+        toolPaths: [String: String] = [:]
+    ) -> String {
+        var parts = [resolve("tmux", in: toolPaths)]
         if connection.controlMode { parts.append("-CC") }
         parts += ["new", "-A", "-s", ShellQuoting.quoted(connection.tmuxSession)]
 
@@ -173,7 +183,7 @@ enum CommandBuilder {
             parts += ["-c", ShellQuoting.remotePath(directory)]
         }
 
-        if let command = sessionCommand(connection, windows: windows) {
+        if let command = sessionCommand(connection, windows: windows, toolPaths: toolPaths) {
             parts.append(ShellQuoting.singleQuoted(command))
         }
         return parts.joined(separator: " ")
@@ -185,13 +195,18 @@ enum CommandBuilder {
     /// Les fenêtres supplémentaires sont créées d'ici, et non enchaînées après
     /// un `\;` sur la ligne tmux : une commande chaînée rejoue à chaque
     /// réattache et empilerait un doublon de chaque fenêtre à chaque connexion.
-    static func sessionCommand(_ connection: Connection, windows: [TmuxWindow]) -> String? {
+    static func sessionCommand(
+        _ connection: Connection,
+        windows: [TmuxWindow],
+        toolPaths: [String: String] = [:]
+    ) -> String? {
+        let tmux = resolve("tmux", in: toolPaths)
         var pieces: [String] = windows.map { window in
-            "tmux new-window -d -n \(ShellQuoting.quoted(window.name)) "
+            "\(tmux) new-window -d -n \(ShellQuoting.quoted(window.name)) "
                 + ShellQuoting.singleQuoted(window.command)
         }
 
-        let initial = connection.initialCommand.executable
+        let initial = connection.initialCommand.executable.map { resolveFirstWord($0, in: toolPaths) }
         if var command = initial {
             if let extra = connection.extraArgs?.trimmingCharacters(in: .whitespaces),
                !extra.isEmpty {
@@ -224,6 +239,26 @@ enum CommandBuilder {
             "Latch : le pré-vol « \(preflight.label) » a échoué — on continue."
         )
         return "{ \(command) || echo \(warning) >&2; }"
+    }
+
+    // MARK: Outils hors PATH
+
+    /// Un outil installé mais invisible d'un shell non interactif doit être
+    /// appelé par son chemin absolu — sinon la commande échoue sur un
+    /// « command not found » alors que le binaire est bien là (§6).
+    private static func resolve(_ tool: String, in paths: [String: String]) -> String {
+        paths[tool].map(ShellQuoting.quoted) ?? tool
+    }
+
+    /// Ne remplace que le nom du programme, pas ses arguments :
+    /// `claude --continue` devient `/home/billy/.local/bin/claude --continue`.
+    private static func resolveFirstWord(_ command: String, in paths: [String: String]) -> String {
+        guard let space = command.firstIndex(of: " ") else {
+            return resolve(command, in: paths)
+        }
+        let name = String(command[command.startIndex..<space])
+        guard paths[name] != nil else { return command }
+        return resolve(name, in: paths) + String(command[space...])
     }
 
     private static func needsRemoteShell(_ connection: Connection) -> Bool {

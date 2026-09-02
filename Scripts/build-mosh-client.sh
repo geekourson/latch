@@ -31,8 +31,10 @@ MOSH_SHA256="872e4b134e5df29c8933dff12350785054d2fd2839b5ae6b5587b14db1465ddd"
 # protobuf 21.12 est la dernière version antérieure à la dépendance abseil :
 # elle se compile en statique avec autotools, sans traîner une seconde
 # bibliothèque C++ derrière elle.
-PROTOBUF_VERSION="21.12"
-PROTOBUF_SHA256="22fdaf641b31655d4b2297f9981fa5203b2866f8332d3c6333f6b0107bb320de"
+# Le tag est « v21.12 » mais l'archive C++ garde la numérotation 3.x.
+PROTOBUF_TAG="21.12"
+PROTOBUF_VERSION="3.21.12"
+PROTOBUF_SHA256="4eab9b524aa5913c6fffb20b2a8abf5ef7f95a80bc0701f3a6dbb4c607f73460"
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/latch-mosh.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -41,7 +43,8 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
 # macOS 14 est la cible de Latch ; le binaire embarqué doit s'y exécuter.
-export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+export MACOSX_DEPLOYMENT_TARGET
 
 log() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 
@@ -66,7 +69,7 @@ find_openssl() {
 OPENSSL_PREFIX="$(find_openssl)"
 log "OpenSSL : $OPENSSL_PREFIX"
 
-fetch "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz" \
+fetch "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_TAG}/protobuf-cpp-${PROTOBUF_VERSION}.tar.gz" \
       "$WORK_DIR/protobuf.tar.gz" "$PROTOBUF_SHA256"
 fetch "https://github.com/mobile-shell/mosh/releases/download/mosh-${MOSH_VERSION}/mosh-${MOSH_VERSION}.tar.gz" \
       "$WORK_DIR/mosh.tar.gz" "$MOSH_SHA256"
@@ -76,42 +79,69 @@ cp "$WORK_DIR/mosh.tar.gz" "$OUTPUT_DIR/mosh-${MOSH_VERSION}.tar.gz"
 cp "$0" "$OUTPUT_DIR/build-mosh-client.sh"
 shasum -a 256 "$OUTPUT_DIR/mosh-${MOSH_VERSION}.tar.gz" > "$OUTPUT_DIR/SHA256SUMS"
 
+JOBS="$(sysctl -n hw.ncpu)"
+HOST_ARCH="$(uname -m)"
+
+# protobuf sert deux fois : ses bibliothèques statiques, propres à chaque
+# architecture, et son compilateur `protoc`, qui doit tourner **ici**. Une
+# tranche x86_64 compilée sur un Mac Apple Silicon produirait un protoc
+# inexécutable — on compile donc d'abord une version native, une seule fois.
+HOST_PREFIX="$WORK_DIR/host/prefix"
+
+build_protobuf() {
+  local arch="$1" prefix="$2" dir="$3" protoc="${4:-}"
+  mkdir -p "$dir" "$prefix"
+  tar xzf "$WORK_DIR/protobuf.tar.gz" -C "$dir"
+  (
+    cd "$dir/protobuf-${PROTOBUF_VERSION}"
+    local args=(--prefix="$prefix" --disable-shared --enable-static
+                --with-pic --disable-dependency-tracking)
+    [ -n "$protoc" ] && args+=(--with-protoc="$protoc")
+    CFLAGS="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+    CXXFLAGS="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+    LDFLAGS="-arch $arch" \
+    ./configure "${args[@]}" >/dev/null
+    make -j"$JOBS" >/dev/null
+    make install >/dev/null
+  )
+}
+
+log "Compilation de protobuf pour l'hôte ($HOST_ARCH)"
+build_protobuf "$HOST_ARCH" "$HOST_PREFIX" "$WORK_DIR/host"
+
 BUILT_SLICES=()
 
 for arch in "${ARCHS[@]}"; do
   log "Compilation pour $arch"
   ARCH_DIR="$WORK_DIR/$arch"
-  PREFIX="$ARCH_DIR/prefix"
-  mkdir -p "$ARCH_DIR" "$PREFIX"
+  mkdir -p "$ARCH_DIR"
 
-  export CFLAGS="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
-  export CXXFLAGS="$CFLAGS"
-  export LDFLAGS="-arch $arch"
-
-  # --- protobuf, en statique -------------------------------------------------
-  tar xzf "$WORK_DIR/protobuf.tar.gz" -C "$ARCH_DIR"
-  (
-    cd "$ARCH_DIR/protobuf-${PROTOBUF_VERSION}"
-    ./configure --prefix="$PREFIX" --disable-shared --enable-static \
-                --with-pic --disable-dependency-tracking >/dev/null
-    make -j"$(sysctl -n hw.ncpu)" >/dev/null
-    make install >/dev/null
-  )
+  if [ "$arch" = "$HOST_ARCH" ]; then
+    PREFIX="$HOST_PREFIX"
+  else
+    PREFIX="$ARCH_DIR/prefix"
+    build_protobuf "$arch" "$PREFIX" "$ARCH_DIR" "$HOST_PREFIX/bin/protoc"
+  fi
 
   # --- mosh ------------------------------------------------------------------
   tar xzf "$WORK_DIR/mosh.tar.gz" -C "$ARCH_DIR"
   (
     cd "$ARCH_DIR/mosh-${MOSH_VERSION}"
-    # mosh ne cherche protobuf que par pkg-config : on lui donne le nôtre en
-    # tête de chemin, et OpenSSL par les variables que son configure attend.
+    # mosh trouve protobuf par pkg-config, et `protoc` par le PATH — celui de
+    # l'hôte, le seul qui puisse s'exécuter.
+    PATH="$HOST_PREFIX/bin:$PATH" \
     PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:$OPENSSL_PREFIX/lib/pkgconfig" \
+    CFLAGS="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+    CXXFLAGS="-arch $arch -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
     ./configure --prefix="$ARCH_DIR/install" \
                 --disable-dependency-tracking \
                 --without-utempter \
                 CPPFLAGS="-I$OPENSSL_PREFIX/include" \
-                LDFLAGS="$LDFLAGS -L$OPENSSL_PREFIX/lib" >/dev/null
-    # Seul le client nous intéresse : mosh-server tourne sur le serveur, pas ici.
-    make -j"$(sysctl -n hw.ncpu)" -C src/frontend mosh-client >/dev/null
+                LDFLAGS="-arch $arch -L$OPENSSL_PREFIX/lib" >/dev/null
+    # Compilation complète : `mosh-client` dépend d'en-têtes générés — les
+    # protobufs et `version.h` — que seule la cible racine produit. On ne garde
+    # ensuite que le client ; mosh-server tourne sur le serveur, pas ici.
+    PATH="$HOST_PREFIX/bin:$PATH" make -j"$JOBS" >/dev/null
   )
 
   SLICE="$ARCH_DIR/mosh-client"

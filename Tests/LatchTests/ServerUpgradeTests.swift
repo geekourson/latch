@@ -249,3 +249,103 @@ final class UpgradePlanTests: XCTestCase {
         XCTAssertFalse(plan.needsAnything)
     }
 }
+
+// MARK: - Le piège du §6, constaté sur un vrai serveur
+
+final class OffPathToolTests: XCTestCase {
+
+    /// La sortie réelle du serveur de référence : `claude` est installé dans
+    /// `~/.local/bin`, que seul `~/.bashrc` ajoute au PATH — donc invisible
+    /// d'un shell non interactif, donc invisible de `command -v`.
+    private let realOutput = """
+        /usr/bin/tmux
+        tmux 3.2a
+        ubuntu
+        LATCH_OFFPATH claude /home/billy/.local/bin/claude
+        """
+
+    func testAToolFoundOnlyOffPathCountsAsPresent() {
+        let result = ServerProbe.parse(realOutput)
+        XCTAssertTrue(result.hasClaude, "claude est installé, même si command -v l'ignore")
+        XCTAssertTrue(result.isOffPath("claude"))
+        XCTAssertEqual(result.offPathTools["claude"], "/home/billy/.local/bin/claude")
+        XCTAssertFalse(result.isOffPath("tmux"), "tmux, lui, est bien sur le PATH")
+    }
+
+    /// Le contraire du bug : proposer de réinstaller ce qui est déjà là.
+    func testAnOffPathToolIsNotOfferedForInstallation() {
+        let plan = ServerUpgradePlanner.plan(for: ServerProbe.parse(realOutput))
+        XCTAssertNil(plan.claudeCommand, "claude est là, on ne propose pas de le réinstaller")
+        XCTAssertEqual(plan.offPathTools["claude"], "/home/billy/.local/bin/claude")
+        XCTAssertTrue(plan.diagnostics.contains { $0.name == "claude" && $0.summary == "claude hors PATH" })
+    }
+
+    /// Un outil trouvé des deux façons n'est pas « hors PATH ».
+    func testAToolOnThePathIsNeverMarkedOffPath() {
+        let result = ServerProbe.parse(
+            """
+            /usr/bin/tmux
+            /home/billy/.local/bin/claude
+            LATCH_OFFPATH claude /home/billy/.local/bin/claude
+            """
+        )
+        XCTAssertTrue(result.hasClaude)
+        XCTAssertFalse(result.isOffPath("claude"))
+    }
+
+    /// Toujours un seul aller-retour, comme l'exige le §6.
+    func testTheProbeStillFitsInOneCommand() {
+        XCTAssertFalse(ServerProbe.remoteScript.contains("\n"))
+        XCTAssertTrue(ServerProbe.remoteScript.contains("command -v tmux mosh-server claude"))
+        XCTAssertTrue(ServerProbe.remoteScript.contains("$HOME/.local/bin"))
+    }
+
+    // MARK: La commande produite
+
+    private func claudeShortcut() -> Shortcut {
+        Shortcut(
+            name: "api",
+            connection: Connection(
+                transport: .ssh, host: "billy", tmuxSession: "api",
+                initialCommand: .claudeContinue, keepShellOnExit: false
+            )
+        )
+    }
+
+    /// Sans ça, la session s'ouvrirait sur « claude: command not found » alors
+    /// que le binaire est installé : tmux lance sa commande via un `sh -c`, qui
+    /// est tout aussi non interactif que la sonde.
+    func testAnOffPathToolIsCalledByItsAbsolutePath() throws {
+        let command = try CommandBuilder.build(
+            claudeShortcut(),
+            toolPaths: ["claude": "/home/billy/.local/bin/claude"]
+        )
+        XCTAssertTrue(command.contains("/home/billy/.local/bin/claude --continue"), command)
+        XCTAssertFalse(command.contains("'claude --continue'"), command)
+    }
+
+    /// Les arguments sont préservés, seul le nom du programme est remplacé.
+    func testOnlyTheProgramNameIsSubstituted() throws {
+        var shortcut = claudeShortcut()
+        shortcut.connection.extraArgs = "--model opus"
+        let command = try CommandBuilder.build(
+            shortcut, toolPaths: ["claude": "/opt/claude"]
+        )
+        XCTAssertTrue(command.contains("/opt/claude --continue --model opus"), command)
+    }
+
+    func testTmuxItselfCanBeOffPath() throws {
+        let command = try CommandBuilder.build(
+            claudeShortcut(), toolPaths: ["tmux": "/usr/local/bin/tmux"]
+        )
+        XCTAssertTrue(command.contains("/usr/local/bin/tmux new -A -s api"), command)
+    }
+
+    /// Sans chemin connu, rien ne change : la commande reste celle du §5.
+    func testNoToolPathsMeansNoSubstitution() throws {
+        XCTAssertEqual(
+            try CommandBuilder.build(claudeShortcut()),
+            #"ssh -t billy "tmux new -A -s api 'claude --continue'""#
+        )
+    }
+}

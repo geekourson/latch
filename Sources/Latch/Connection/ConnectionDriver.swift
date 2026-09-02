@@ -30,7 +30,22 @@ protocol ConnectionDriver {
 
     /// Prépare le lancement. Peut faire un aller-retour réseau — la poignée de
     /// main de mosh en fait un — d'où l'asynchronisme.
-    func plan(for shortcut: Shortcut, degradation: Degradation) async throws -> LaunchPlan
+    ///
+    /// `toolPaths` porte les outils que la sonde a trouvés hors du `PATH` d'un
+    /// shell non interactif : il faut les appeler par leur chemin absolu, sinon
+    /// la commande échoue sur un « command not found » alors que le binaire est
+    /// bien installé (§6).
+    func plan(
+        for shortcut: Shortcut,
+        degradation: Degradation,
+        toolPaths: [String: String]
+    ) async throws -> LaunchPlan
+}
+
+extension ConnectionDriver {
+    func plan(for shortcut: Shortcut, degradation: Degradation) async throws -> LaunchPlan {
+        try await plan(for: shortcut, degradation: degradation, toolPaths: [:])
+    }
 }
 
 // MARK: - Choix du driver
@@ -64,8 +79,14 @@ enum ConnectionDrivers {
 struct LocalDriver: ConnectionDriver {
     static let transport: Transport = .local
 
-    func plan(for shortcut: Shortcut, degradation: Degradation) async throws -> LaunchPlan {
-        LaunchPlan(command: try CommandBuilder.build(shortcut, degradation: degradation))
+    func plan(
+        for shortcut: Shortcut, degradation: Degradation, toolPaths: [String: String]
+    ) async throws -> LaunchPlan {
+        LaunchPlan(
+            command: try CommandBuilder.build(
+                shortcut, degradation: degradation, toolPaths: toolPaths
+            )
+        )
     }
 }
 
@@ -74,9 +95,13 @@ struct LocalDriver: ConnectionDriver {
 struct SSHDriver: ConnectionDriver {
     static let transport: Transport = .ssh
 
-    func plan(for shortcut: Shortcut, degradation: Degradation) async throws -> LaunchPlan {
+    func plan(
+        for shortcut: Shortcut, degradation: Degradation, toolPaths: [String: String]
+    ) async throws -> LaunchPlan {
         var plan = LaunchPlan(
-            command: try CommandBuilder.build(shortcut, degradation: degradation)
+            command: try CommandBuilder.build(
+                shortcut, degradation: degradation, toolPaths: toolPaths
+            )
         )
         if shortcut.connection.transport == .mosh, degradation.isDegraded {
             plan.notice = degradation.bannerTitle

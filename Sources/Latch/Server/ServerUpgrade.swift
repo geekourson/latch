@@ -81,10 +81,16 @@ struct ToolStatus: Identifiable, Equatable {
     var name: String
     var isPresent: Bool
     var version: String?
+    /// Présent sur le disque, mais introuvable depuis un shell non interactif.
+    var offPathAt: String?
+
+    var isOffPath: Bool { offPathAt != nil }
 
     var summary: String {
-        if let version, isPresent { return "\(name) \(version)" }
-        return isPresent ? name : "\(name) absent"
+        guard isPresent else { return "\(name) absent" }
+        if isOffPath { return "\(name) hors PATH" }
+        if let version { return "\(name) \(version)" }
+        return name
     }
 }
 
@@ -104,11 +110,14 @@ struct UpgradePlan: Equatable {
     /// séparée, et surtout **sans sudo** — l'installeur officiel refuse de
     /// tourner sous sudo et pose le binaire dans `$HOME/.local/bin`.
     var claudeCommand: String?
+    /// Les outils installés mais invisibles d'un shell non interactif : il n'y
+    /// a rien à installer pour eux, seulement un `PATH` à corriger.
+    var offPathTools: [String: String] = [:]
     var distributionName: String?
     var hasKnownDistribution: Bool { packageCommand != nil }
 
     var needsAnything: Bool {
-        !missingPackages.isEmpty || claudeCommand != nil
+        !missingPackages.isEmpty || claudeCommand != nil || !offPathTools.isEmpty
     }
 }
 
@@ -127,10 +136,20 @@ enum ServerUpgradePlanner {
         var plan = UpgradePlan()
         plan.degradation = ServerCapabilities.degradation(for: probe)
         plan.diagnostics = [
-            ToolStatus(name: "tmux", isPresent: probe.hasTmux, version: probe.tmuxVersion),
-            ToolStatus(name: "mosh-server", isPresent: probe.hasMoshServer, version: nil),
-            ToolStatus(name: "claude", isPresent: probe.hasClaude, version: nil),
+            ToolStatus(
+                name: "tmux", isPresent: probe.hasTmux, version: probe.tmuxVersion,
+                offPathAt: probe.offPathTools["tmux"]
+            ),
+            ToolStatus(
+                name: "mosh-server", isPresent: probe.hasMoshServer,
+                offPathAt: probe.offPathTools["mosh-server"]
+            ),
+            ToolStatus(
+                name: "claude", isPresent: probe.hasClaude,
+                offPathAt: probe.offPathTools["claude"]
+            ),
         ]
+        plan.offPathTools = probe.offPathTools
 
         if !probe.hasTmux { plan.missingPackages.append("tmux") }
         if wantsMosh, !probe.hasMoshServer { plan.missingPackages.append("mosh") }

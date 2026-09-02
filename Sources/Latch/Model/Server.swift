@@ -38,4 +38,17 @@ struct ProbeResult: Codable, Equatable {
     var hasClaude: Bool = false
     /// Champ `ID` de `/etc/os-release`.
     var osID: String?
+
+    /// Les outils trouvés sur le disque mais **invisibles** d'un shell non
+    /// interactif, avec leur chemin.
+    ///
+    /// C'est le piège du §6, et il n'est pas théorique : sur le serveur de
+    /// référence, `claude` vit dans `~/.local/bin` que seul `~/.bashrc` ajoute
+    /// au `PATH`. Sans ce champ, la sonde conclurait « claude absent » et le
+    /// panneau proposerait de réinstaller ce qui est déjà là.
+    var offPathTools: [String: String] = [:]
+
+    func isOffPath(_ tool: String) -> Bool { offPathTools[tool] != nil }
+
+    var hasOffPathTools: Bool { !offPathTools.isEmpty }
 }

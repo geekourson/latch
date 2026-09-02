@@ -50,7 +50,9 @@ struct MoshDriver: ConnectionDriver {
 
     var availability: MoshClient.Availability = MoshClient.locate()
 
-    func plan(for shortcut: Shortcut, degradation: Degradation) async throws -> LaunchPlan {
+    func plan(
+        for shortcut: Shortcut, degradation: Degradation, toolPaths: [String: String]
+    ) async throws -> LaunchPlan {
         switch availability {
         case .system(let path):
             // Le script d'enrobage fait la poignée de main tout seul ; il n'y a
@@ -58,7 +60,7 @@ struct MoshDriver: ConnectionDriver {
             // le Finder ne contenant pas /opt/homebrew/bin.
             return LaunchPlan(
                 command: try CommandBuilder.build(
-                    shortcut, degradation: degradation, moshBinary: path
+                    shortcut, degradation: degradation, moshBinary: path, toolPaths: toolPaths
                 ),
                 notice: "mosh du système — les binaires publiés embarquent le leur."
             )
@@ -68,7 +70,7 @@ struct MoshDriver: ConnectionDriver {
             let address = try await Self.resolveAddress(ofAlias: alias)
             return LaunchPlan(
                 command: try Self.handshakeCommand(
-                    for: shortcut, clientPath: path, address: address
+                    for: shortcut, clientPath: path, address: address, toolPaths: toolPaths
                 )
             )
 
@@ -83,13 +85,17 @@ struct MoshDriver: ConnectionDriver {
     /// Swift en arrière-plan : ssh doit pouvoir demander une phrase de passe ou
     /// une confirmation d'empreinte, et l'utilisateur doit la voir.
     static func handshakeCommand(
-        for shortcut: Shortcut, clientPath: String, address: String
+        for shortcut: Shortcut,
+        clientPath: String,
+        address: String,
+        toolPaths: [String: String] = [:]
     ) throws -> String {
         let host = ShellQuoting.quoted(shortcut.connection.host)
-        let remote = try CommandBuilder.remoteInvocation(shortcut)
+        let remote = try CommandBuilder.remoteInvocation(shortcut, toolPaths: toolPaths)
+        let server = toolPaths["mosh-server"].map(ShellQuoting.quoted) ?? "mosh-server"
 
         let serverCommand = ShellQuoting.singleQuoted(
-            "mosh-server new -s -c 256 -l LANG=\(remoteLocale) -- " + remote
+            "\(server) new -s -c 256 -l LANG=\(remoteLocale) -- " + remote
         )
 
         let steps = [

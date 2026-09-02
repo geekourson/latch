@@ -111,7 +111,11 @@ final class AppState: ObservableObject {
         // poignée de main avant de la rendre.
         let driver = ConnectionDrivers.driver(for: shortcut, degradation: degradation)
         do {
-            let plan = try await driver.plan(for: shortcut, degradation: degradation)
+            let plan = try await driver.plan(
+                for: shortcut,
+                degradation: degradation,
+                toolPaths: probe?.offPathTools ?? [:]
+            )
             let session = TerminalSession(
                 name: shortcut.name,
                 command: plan.command,
@@ -166,6 +170,20 @@ final class AppState: ObservableObject {
             stream.stop()
             hookStreams.removeValue(forKey: host)
             claudeActivity.removeValue(forKey: host)
+        }
+    }
+
+    /// Installe les hooks sur un hôte, puis rouvre le flux pour que
+    /// l'indicateur s'allume sans attendre une reconnexion.
+    func installHooks(on alias: String) async -> Result<String, Error> {
+        do {
+            let output = try await HookInstaller.install(on: alias)
+            hookStreams[alias]?.stop()
+            hookStreams.removeValue(forKey: alias)
+            followHooks(on: alias)
+            return .success(output.trimmingCharacters(in: .whitespacesAndNewlines))
+        } catch {
+            return .failure(error)
         }
     }
 
