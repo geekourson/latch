@@ -18,6 +18,10 @@ final class SessionStore: ObservableObject {
 
     @Published var servers: [Server] = []
     @Published var shortcuts: [Shortcut] = []
+    /// Thèmes importés (§9.3). La palette « braise » n'est pas dedans : elle
+    /// est intégrée et ne se supprime pas.
+    @Published var themes: [Theme] = []
+    @Published var preferences = Preferences()
 
     /// Dernière erreur d'écriture, affichée par l'interface plutôt qu'avalée.
     @Published private(set) var lastError: String?
@@ -47,6 +51,8 @@ final class SessionStore: ObservableObject {
         var version: Int = 1
         var servers: [Server] = []
         var shortcuts: [Shortcut] = []
+        var themes: [Theme] = []
+        var preferences = Preferences()
     }
 
     // MARK: - Cycle de vie
@@ -69,6 +75,8 @@ final class SessionStore: ObservableObject {
             let document = try JSONDecoder().decode(Document.self, from: data)
             servers = document.servers
             shortcuts = document.shortcuts
+            themes = document.themes
+            preferences = document.preferences
         } catch {
             // Un fichier illisible ne doit pas empêcher l'app de démarrer, et
             // surtout pas être écrasé en silence : on le laisse en place et on
@@ -101,7 +109,13 @@ final class SessionStore: ObservableObject {
     }
 
     func saveNow() {
-        let document = Document(version: 1, servers: servers, shortcuts: shortcuts)
+        let document = Document(
+            version: 1,
+            servers: servers,
+            shortcuts: shortcuts,
+            themes: themes,
+            preferences: preferences
+        )
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -178,6 +192,52 @@ final class SessionStore: ObservableObject {
         return shortcuts.filter {
             $0.connection.transport == .local || !aliases.contains($0.connection.host)
         }
+    }
+
+    // MARK: - Thèmes (§9.3)
+
+    /// Le thème actif, ou la palette « braise » si aucun n'a été choisi.
+    var activeTheme: Theme {
+        themes.first { $0.id == preferences.themeID } ?? .ember
+    }
+
+    /// Ce que la vue de terminal doit appliquer, dérivé des réglages.
+    var terminalStyle: TerminalStyle {
+        TerminalStyle(
+            theme: activeTheme,
+            fontName: preferences.fontName,
+            fontSize: CGFloat(preferences.fontSize),
+            lineSpacing: CGFloat(preferences.lineSpacing),
+            padding: CGFloat(preferences.padding)
+        )
+    }
+
+    /// Importe un `.itermcolors` ou un schéma base16 et l'active.
+    @discardableResult
+    func importTheme(at url: URL) throws -> Theme {
+        var theme = try ThemeImporter.theme(contentsOf: url)
+
+        // Réimporter le même fichier remplace le thème plutôt que d'en empiler
+        // un doublon dans le sélecteur — en gardant l'identifiant existant,
+        // pour que le raccourci qui le désignait continue de le désigner.
+        if let index = themes.firstIndex(where: {
+            $0.name == theme.name && $0.source == theme.source
+        }) {
+            theme.id = themes[index].id
+            themes[index] = theme
+        } else {
+            themes.append(theme)
+        }
+
+        preferences.themeID = theme.id
+        scheduleSave()
+        return theme
+    }
+
+    func removeTheme(id: Theme.ID) {
+        themes.removeAll { $0.id == id }
+        if preferences.themeID == id { preferences.themeID = nil }
+        scheduleSave()
     }
 
     // MARK: - Sonde (§6)

@@ -20,7 +20,16 @@ struct LatchApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1000, height: 640)
         .commands {
-            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .newItem) {
+                Button("Nouvelle session") { app.newShortcut() }
+                    .keyboardShortcut("n")
+            }
+        }
+
+        Settings {
+            SettingsView()
+                .environmentObject(app)
+                .preferredColorScheme(.dark)
         }
     }
 }

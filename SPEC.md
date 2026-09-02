@@ -212,8 +212,11 @@ struct Server: Codable, Identifiable {
 Exemples attendus, à couvrir par des tests :
 
 ```bash
-# mosh + claude, avec dossier de travail
-mosh billy -- tmux new -A -s api -c ~/api 'claude; exec $SHELL'
+# mosh + claude, avec dossier de travail.
+# mosh exécute la commande distante SANS shell : personne ne développerait
+# `~/api` côté serveur, et le shell local le développerait avec le répertoire
+# personnel du Mac. D'où le `sh -c`, et seulement quand un chemin l'exige.
+mosh billy -- sh -c "tmux new -A -s api -c ~/api 'claude; exec \$SHELL'"
 
 # ssh + reprise de conversation
 ssh -t billy "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
@@ -304,6 +307,13 @@ Contenu, de haut en bas :
 
    N'inclure que les paquets réellement manquants. Si seul mosh manque, la
    commande ne doit pas réinstaller tmux.
+
+   **Claude Code a sa propre ligne**, séparée du bloc des paquets de
+   distribution : il n'est dans aucun gestionnaire de paquets. La commande est
+   `curl -fsSL https://claude.ai/install.sh | bash`, et surtout **sans `sudo`** —
+   l'installeur officiel refuse de tourner sous sudo et pose le binaire dans
+   `$HOME/.local/bin`, ce qui renvoie directement au piège du `PATH` décrit plus
+   bas.
 
 4. **Note pare-feu**, affichée uniquement si mosh fait partie des paquets à
    installer : mosh a besoin des ports UDP 60000–61000, avec la commande `ufw`
@@ -428,8 +438,13 @@ Prévoir l'import de thèmes au format base16 ou iTerm2 dès la v0.2 — ne pas
 inventer un format maison.
 
 Typographie : police mono configurable, défaut JetBrains Mono avec repli sur SF
-Mono. Ligatures activables/désactivables. Largeur de cellule dérivée de
-l'avance d'un glyphe de référence, jamais des métriques globales de la police.
+Mono. Largeur de cellule dérivée de l'avance d'un glyphe de référence, jamais
+des métriques globales de la police — SwiftTerm le fait déjà, à partir du
+glyphe « W ».
+
+Les ligatures ne sont pas réglables : SwiftTerm dessine glyphe par glyphe sur
+une grille de cellules et n'expose aucun réglage. Rien à activer tant que
+l'émulateur ne le permet pas.
 
 ---
 
@@ -515,17 +530,17 @@ dur. Critère d'acceptation : `mosh billy -- tmux new -A -s api` s'ouvre,
 ### v0.2 — C'est une app
 
 `SessionStore` + JSON, barre latérale avec serveurs et sessions, onglets,
-`CommandBuilder` complet avec tests, écran du builder, thème.
+`CommandBuilder` complet avec tests, écran du builder, thème, import de thèmes
+base16 et iTerm2 (§9.3), sonde serveur et cascade de dégradation (§6).
 
 ### v0.3 — C'est utile
 
-`MoshDriver` avec binaire embarqué, sonde et cascade de dégradation,
-reconnexion au réveil, hooks Claude Code.
+`MoshDriver` avec binaire embarqué, reconnexion au réveil, hooks Claude Code.
 
 ### v0.4 — C'est distinctif
 
 `tmux -CC` pour peupler la barre latérale avec les vraies fenêtres tmux, serveur
-MCP, import de thèmes.
+MCP.
 
 ---
 

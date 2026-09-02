@@ -2,18 +2,18 @@
 //  LatchTheme.swift
 //  Latch
 //
-//  Palette « braise » (SPEC §9.3) : charbon chaud plutôt que gris neutre.
-//  L'import de thèmes base16 / iTerm2 est prévu pour la v0.2 ; d'ici là cette
-//  palette est la seule, et elle est codée une fois, ici.
+//  La palette « braise » du §9.3 habille l'application elle-même — barre
+//  latérale, onglets, panneaux. Le terminal, lui, suit le thème choisi : un
+//  thème iTerm2 clair importé pour lire du code ne doit pas repeindre toute
+//  l'app au passage.
 //
 
 import AppKit
-import SwiftTerm
 import SwiftUI
 
 enum LatchTheme {
 
-    // MARK: - Palette
+    // MARK: - Chrome de l'application
 
     static let background = NSColor(hex: 0x17130F)
     static let surface = NSColor(hex: 0x1D1813)
@@ -30,30 +30,49 @@ enum LatchTheme {
     // MARK: - Typographie
 
     /// Police mono du terminal. JetBrains Mono si elle est installée, sinon
-    /// SF Mono, sinon Menlo — qui, elle, est toujours là.
-    static func monoFont(size: CGFloat = 13) -> NSFont {
-        for name in ["JetBrainsMono-Regular", "JetBrains Mono", "SFMono-Regular"] {
-            if let font = NSFont(name: name, size: size) { return font }
+    /// SF Mono, sinon la mono du système — qui, elle, est toujours là.
+    static func monoFont(named name: String? = nil, size: CGFloat = 13) -> NSFont {
+        var candidates: [String] = []
+        if let name, !name.isEmpty { candidates.append(name) }
+        candidates += ["JetBrainsMono-Regular", "JetBrains Mono", "SFMono-Regular"]
+
+        for candidate in candidates {
+            if let font = NSFont(name: candidate, size: size) { return font }
         }
         return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
-    // MARK: - Couleurs ANSI
+    /// Les familles à largeur fixe installées, pour le sélecteur des réglages.
+    static var availableMonoFamilies: [String] {
+        NSFontManager.shared.availableFontFamilies.filter { family in
+            guard let font = NSFont(name: family, size: 12) else { return false }
+            return font.isFixedPitch
+        }
+        .sorted()
+    }
+}
 
-    /// Les 16 couleurs ANSI, dans l'ordre attendu par SwiftTerm :
-    /// noir, rouge, vert, jaune, bleu, magenta, cyan, blanc, puis les vives.
-    static let ansiColors: [SwiftTerm.Color] = [
-        0x241D18, 0xC96A5E, 0x8FB09A, 0xC89B6A,
-        0x7E9CC0, 0xB3A0D6, 0x86B4B0, 0xEDE4D8,
-        0x57493F, 0xDE8579, 0xA9C7B3, 0xDDB688,
-        0x9AB5D6, 0xC9B9E6, 0xA1CCC8, 0xFFFFFF,
-    ].map { SwiftTerm.Color(hex: $0) }
+// MARK: - Style du terminal
+
+/// Ce qu'il faut savoir pour habiller une vue de terminal : un thème et une
+/// typographie. Une valeur, comparable, pour que la vue ne se réapplique que
+/// quand quelque chose a vraiment changé.
+struct TerminalStyle: Equatable {
+    var theme: Theme = .ember
+    var fontName: String?
+    var fontSize: CGFloat = 13
+    /// Multiplicateur de la hauteur de ligne (SPEC §9.1).
+    var lineSpacing: CGFloat = 1.25
+    /// Marges autour du terminal (SPEC §9.1 : 18–22 px).
+    var padding: CGFloat = 20
+
+    var font: NSFont { LatchTheme.monoFont(named: fontName, size: fontSize) }
 }
 
 // MARK: - Confort
 
 extension NSColor {
-    /// `0xRRGGBB`, dans l'espace sRGB — pas dans l'espace « device » dont le
+    /// `0xRRGGBB`, dans l'espace sRGB — pas dans l'espace « device », dont le
     /// rendu dépend de l'écran.
     convenience init(hex: UInt32) {
         self.init(
@@ -61,16 +80,6 @@ extension NSColor {
             green: CGFloat((hex >> 8) & 0xFF) / 255,
             blue: CGFloat(hex & 0xFF) / 255,
             alpha: 1
-        )
-    }
-}
-
-extension SwiftTerm.Color {
-    convenience init(hex: UInt32) {
-        self.init(
-            red8: UInt16((hex >> 16) & 0xFF),
-            green8: UInt16((hex >> 8) & 0xFF),
-            blue8: UInt16(hex & 0xFF)
         )
     }
 }
@@ -85,4 +94,5 @@ extension SwiftUI.Color {
     static let latchTextFaint = SwiftUI.Color(LatchTheme.textFaint)
     static let latchAccent = SwiftUI.Color(LatchTheme.accent)
     static let latchSuccess = SwiftUI.Color(LatchTheme.success)
+    static let latchClaude = SwiftUI.Color(LatchTheme.claude)
 }

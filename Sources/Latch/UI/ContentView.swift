@@ -69,11 +69,11 @@ struct ContentView: View {
     /// donc la géométrie annoncée à tmux reste juste.
     private var terminalArea: some View {
         ZStack {
-            Color.latchBackground
+            Color(app.store.activeTheme.background.nsColor)
 
             ForEach(app.tabs) { session in
                 let isSelected = session.id == app.selectedTabID
-                TerminalPane(session: session)
+                TerminalPane(session: session, style: app.store.terminalStyle)
                     .opacity(isSelected ? 1 : 0)
                     .allowsHitTesting(isSelected)
                     .zIndex(isSelected ? 1 : 0)

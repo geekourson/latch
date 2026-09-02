@@ -11,39 +11,51 @@ import Combine
 import SwiftTerm
 import SwiftUI
 
-/// Marges autour du terminal (SPEC §9.1).
-private let terminalPadding: CGFloat = 20
-/// Interligne (SPEC §9.1) : un multiplicateur de la hauteur de ligne de la
-/// police. 1.0 est compact, au-delà de 1.5 on perd un tiers des lignes utiles
-/// sans gagner en lisibilité.
-private let terminalLineSpacing: CGFloat = 1.25
-
 struct TerminalPane: NSViewRepresentable {
     @ObservedObject var session: TerminalSession
+    /// Thème et typographie, recalculés par le store (SPEC §9.3).
+    var style: TerminalStyle = TerminalStyle()
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
     }
 
     func makeNSView(context: Context) -> PaddedTerminalView {
-        let container = PaddedTerminalView(inset: terminalPadding)
-        let terminal = container.terminalView
-
-        terminal.font = LatchTheme.monoFont()
-        terminal.lineSpacing = terminalLineSpacing
-        terminal.nativeBackgroundColor = LatchTheme.background
-        terminal.nativeForegroundColor = LatchTheme.text
-        terminal.caretColor = LatchTheme.accent
-        terminal.selectedTextBackgroundColor = LatchTheme.surfaceHigh
-        terminal.installColors(LatchTheme.ansiColors)
-        terminal.terminalDelegate = context.coordinator
-
-        context.coordinator.attach(to: terminal)
+        let container = PaddedTerminalView(inset: style.padding)
+        container.terminalView.terminalDelegate = context.coordinator
+        apply(style, to: container)
+        context.coordinator.appliedStyle = style
+        context.coordinator.attach(to: container.terminalView)
         return container
     }
 
     func updateNSView(_ nsView: PaddedTerminalView, context: Context) {
         context.coordinator.session = session
+        guard context.coordinator.appliedStyle != style else { return }
+        apply(style, to: nsView)
+        context.coordinator.appliedStyle = style
+    }
+
+    /// Un thème change les seize couleurs ANSI, le fond, le texte, le curseur
+    /// et la sélection d'un coup. On ne réapplique que si quelque chose a
+    /// bougé : chaque changement de police recalcule la grille du terminal.
+    private func apply(_ style: TerminalStyle, to container: PaddedTerminalView) {
+        let terminal = container.terminalView
+        let theme = style.theme
+
+        container.inset = style.padding
+        terminal.font = style.font
+        terminal.lineSpacing = style.lineSpacing
+        terminal.nativeBackgroundColor = theme.background.nsColor
+        terminal.nativeForegroundColor = theme.foreground.nsColor
+        terminal.caretColor = theme.cursor.nsColor
+        terminal.selectedTextBackgroundColor = theme.selectionBackground.nsColor
+        if let selected = theme.selectionForeground {
+            terminal.selectedTextForegroundColor = selected.nsColor
+        }
+        terminal.installColors(theme.terminalColors)
+        container.layer?.backgroundColor = theme.background.cgColor
+        container.needsLayout = true
     }
 
     static func dismantleNSView(_ nsView: PaddedTerminalView, coordinator: Coordinator) {
@@ -55,6 +67,8 @@ struct TerminalPane: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, TerminalViewDelegate {
         var session: TerminalSession
+        /// Le dernier style posé, pour ne pas réappliquer à chaque redessin.
+        var appliedStyle: TerminalStyle?
         private var cancellable: AnyCancellable?
         private weak var terminal: TerminalView?
         private var didStart = false
@@ -121,7 +135,9 @@ struct TerminalPane: NSViewRepresentable {
 /// propre largeur, donc le padding doit vivre dans une vue parente.
 final class PaddedTerminalView: NSView {
     let terminalView: TerminalView
-    private let inset: CGFloat
+    var inset: CGFloat {
+        didSet { needsLayout = true }
+    }
 
     init(inset: CGFloat) {
         self.inset = inset
@@ -129,7 +145,6 @@ final class PaddedTerminalView: NSView {
         super.init(frame: .zero)
 
         wantsLayer = true
-        layer?.backgroundColor = LatchTheme.background.cgColor
         addSubview(terminalView)
     }
 
