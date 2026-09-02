@@ -549,8 +549,19 @@ sous MIT, se contente de le lancer comme exécutable séparé.
 
 ### v0.4 — C'est distinctif
 
-`tmux -CC` pour peupler la barre latérale avec les vraies fenêtres tmux, serveur
-MCP.
+Les vraies fenêtres tmux dans la barre latérale, serveur MCP.
+
+Le §12 disait « `tmux -CC` » pour les fenêtres. Le mode contrôle impose
+d'implémenter le protocole, de démultiplexer `%output` vers plusieurs vues et de
+refaire toute la couche de rendu. Interroger tmux — `tmux list-windows -a -F`,
+en boucle sur la connexion ssh secondaire qui existe déjà — donne la même barre
+latérale sans toucher au terminal. Le mode contrôle reste possible plus tard,
+comme ajout et non comme prérequis.
+
+Le serveur MCP tourne sur le Mac et Claude Code sur le serveur : le pont est un
+`-R` porté par la connexion des hooks. Il n'écoute que sur `127.0.0.1` et exige
+un jeton tiré à chaque lancement — un serveur local capable d'ouvrir des
+terminaux ne se laisse pas sans serrure.
 
 ---
 

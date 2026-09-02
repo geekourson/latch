@@ -31,6 +31,13 @@ final class AppState: ObservableObject {
     /// Une connexion ssh secondaire par hôte ayant un onglet ouvert.
     private var hookStreams: [String: HookStream] = [:]
 
+    /// Les vraies fenêtres tmux, par hôte (§12, v0.4).
+    @Published private(set) var liveWindows: [String: [String: [LiveWindow]]] = [:]
+    private var inspectors: [String: TmuxInspector] = [:]
+
+    /// Le serveur MCP qui expose Latch à Claude Code (§10).
+    let mcp = MCPServer()
+
     private var cancellables = Set<AnyCancellable>()
 
     /// Le store est construit ici et pas dans la valeur par défaut du
@@ -46,6 +53,9 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
 
         observeSystemSleep()
+
+        mcp.host = self
+        mcp.start()
     }
 
     // MARK: - Veille et réveil (§8)
@@ -141,7 +151,10 @@ final class AppState: ObservableObject {
     private func followHooks(on host: String) {
         guard !host.isEmpty, hookStreams[host] == nil else { return }
 
-        let stream = HookStream(alias: host)
+        let stream = HookStream(
+            alias: host,
+            remoteForward: mcp.isRunning ? mcp.remoteForwardOption : nil
+        )
         stream.onEvent = { [weak self, weak stream] event in
             guard let self, let stream else { return }
             self.claudeActivity[host] = stream.activity
@@ -149,6 +162,20 @@ final class AppState: ObservableObject {
         }
         hookStreams[host] = stream
         stream.start()
+
+        let inspector = TmuxInspector(alias: host)
+        inspectors[host] = inspector
+        inspector.objectWillChange
+            .sink { [weak self, weak inspector] in
+                // `objectWillChange` précède la mutation : on relit au tour
+                // suivant, sinon on recopie l'ancienne valeur.
+                DispatchQueue.main.async {
+                    guard let self, let inspector else { return }
+                    self.liveWindows[host] = inspector.windows
+                }
+            }
+            .store(in: &cancellables)
+        inspector.start()
     }
 
     /// Le §10 demande une notification quand une tâche se termine ou qu'une
@@ -171,6 +198,22 @@ final class AppState: ObservableObject {
             hookStreams.removeValue(forKey: host)
             claudeActivity.removeValue(forKey: host)
         }
+        for (host, inspector) in inspectors where !liveHosts.contains(host) {
+            inspector.stop()
+            inspectors.removeValue(forKey: host)
+            liveWindows.removeValue(forKey: host)
+        }
+    }
+
+    /// Les fenêtres tmux d'une session ouverte sur un hôte.
+    func liveWindows(on host: String, session: String) -> [LiveWindow] {
+        (liveWindows[host]?[session] ?? []).sorted { $0.index < $1.index }
+    }
+
+    /// Bascule la session distante sur cette fenêtre. Le terminal suit tout
+    /// seul : c'est tmux qui décide de ce qu'il affiche.
+    func select(_ window: LiveWindow, on host: String) {
+        inspectors[host]?.select(window)
     }
 
     /// Installe les hooks sur un hôte, puis rouvre le flux pour que
@@ -278,5 +321,73 @@ final class AppState: ObservableObject {
             store.server(forAlias: shortcut.connection.host, creatingIfNeeded: true)
         }
         editedShortcut = nil
+    }
+}
+
+// MARK: - Serveur MCP (§10)
+
+/// Ce que Latch accepte de faire pour Claude Code. Rien qui touche au système :
+/// seulement ouvrir des onglets dans l'app, ce que l'utilisateur voit et peut
+/// fermer. Les commandes proposées passent par les mêmes chemins que celles
+/// tapées à la main, échappement compris.
+extension AppState: MCPHost {
+
+    func mcpListSessions() -> [[String: Any]] {
+        tabs.map { session in
+            [
+                "name": session.name,
+                "title": session.title,
+                "host": session.host,
+                "state": session.connection.label,
+                "selected": session.id == selectedTabID,
+            ]
+        }
+    }
+
+    func mcpOpenSession(named name: String) async -> String {
+        let wanted = name.lowercased()
+        guard
+            let shortcut = store.shortcuts.first(where: { $0.name.lowercased() == wanted })
+                ?? store.shortcuts.first(where: {
+                    $0.connection.tmuxSession.lowercased() == wanted
+                })
+        else {
+            let known = store.shortcuts.map(\.name).joined(separator: ", ")
+            return "Aucun raccourci nommé « \(name) ». Raccourcis connus : \(known)."
+        }
+        await open(shortcut)
+        return "Onglet « \(shortcut.name) » ouvert."
+    }
+
+    func mcpRunCommand(_ command: String, on host: String?, named name: String?) -> String {
+        guard let alias = host ?? selectedTab?.host, !alias.isEmpty else {
+            return "Aucun hôte : précise « host », ou ouvre d'abord une session."
+        }
+        let title = name ?? command
+        let session = TerminalSession(
+            name: title,
+            command: "ssh -t \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(command))",
+            host: alias
+        )
+        tabs.append(session)
+        selectedTabID = session.id
+        return "Onglet « \(title) » ouvert sur \(alias)."
+    }
+
+    func mcpShowFile(_ path: String, on host: String?) -> String {
+        guard let alias = host ?? selectedTab?.host, !alias.isEmpty else {
+            return "Aucun hôte : précise « host », ou ouvre d'abord une session."
+        }
+        // `less -R` garde les couleurs et rend la main avec « q ». Le fichier
+        // est seulement lu ; Latch n'écrit jamais dedans.
+        let remote = "less -R -- \(ShellQuoting.quoted(path))"
+        let session = TerminalSession(
+            name: (path as NSString).lastPathComponent,
+            command: "ssh -t \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(remote))",
+            host: alias
+        )
+        tabs.append(session)
+        selectedTabID = session.id
+        return "« \(path) » affiché depuis \(alias)."
     }
 }

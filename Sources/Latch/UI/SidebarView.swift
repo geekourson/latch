@@ -105,6 +105,12 @@ private struct ServerSection: View {
 
             ForEach(app.store.shortcuts(for: server)) { shortcut in
                 ShortcutRow(shortcut: shortcut)
+
+                // Les vraies fenêtres tmux, telles que le serveur les voit.
+                ForEach(app.liveWindows(on: server.sshAlias,
+                                        session: shortcut.connection.tmuxSession)) { window in
+                    WindowRow(window: window, host: server.sshAlias)
+                }
             }
         }
         .padding(.top, 8)
@@ -162,6 +168,41 @@ private struct ShortcutRow: View {
                 app.store.remove(shortcutID: shortcut.id)
             }
         }
+    }
+}
+
+/// Une fenêtre tmux réelle (§12, v0.4). Cliquer bascule la session distante
+/// dessus ; le terminal suit tout seul, c'est tmux qui décide de ce qu'il
+/// affiche.
+private struct WindowRow: View {
+    @EnvironmentObject private var app: AppState
+    let window: LiveWindow
+    let host: String
+
+    var body: some View {
+        Button {
+            app.select(window, on: host)
+        } label: {
+            HStack(spacing: 5) {
+                Text("\(window.index)")
+                    .foregroundStyle(Color.latchTextFaint)
+                Text(window.name)
+                    .foregroundStyle(window.isActive ? Color.latchText : Color.latchTextDim)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if let command = window.currentCommand, command != window.name {
+                    Text(command)
+                        .foregroundStyle(Color.latchTextFaint)
+                        .lineLimit(1)
+                }
+            }
+            .font(.system(size: 10.5, design: .monospaced))
+            .padding(.leading, 28)
+            .padding(.trailing, 6)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -14,6 +14,11 @@ import Foundation
 final class HookStream: ObservableObject {
 
     let alias: String
+    /// `-R port:127.0.0.1:port` : c'est par ce tunnel que Claude Code, sur le
+    /// serveur, atteint le serveur MCP de Latch (§10). La connexion des hooks
+    /// le porte parce qu'elle existe déjà, et pour tous les transports —
+    /// y compris mosh, qui n'est pas du ssh.
+    var remoteForward: String?
 
     @Published private(set) var activity = ClaudeActivity()
     /// Vrai quand la connexion secondaire tient. Faux ne veut pas dire que la
@@ -31,8 +36,9 @@ final class HookStream: ObservableObject {
 
     private let policy = ReconnectionPolicy(base: 2, cap: 30, maxAttempts: .max)
 
-    init(alias: String) {
+    init(alias: String, remoteForward: String? = nil) {
         self.alias = alias
+        self.remoteForward = remoteForward
     }
 
     deinit {
@@ -58,16 +64,18 @@ final class HookStream: ObservableObject {
     private func launch() {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        task.arguments = [
+        var arguments = [
             // Pas de TTY, pas d'agent, pas d'interaction : cette connexion doit
             // vivre en arrière-plan sans jamais réclamer quoi que ce soit.
             "-o", "BatchMode=yes",
             "-o", "ServerAliveInterval=30",
             "-o", "ServerAliveCountMax=3",
             "-o", "ConnectTimeout=10",
-            alias,
-            HookInstaller.followCommand,
+            "-o", "ExitOnForwardFailure=no",
         ]
+        if let remoteForward { arguments += ["-R", remoteForward] }
+        arguments += [alias, HookInstaller.followCommand]
+        task.arguments = arguments
 
         let out = Pipe()
         task.standardOutput = out

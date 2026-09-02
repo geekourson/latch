@@ -48,6 +48,7 @@ struct UpgradePanelView: View {
                     }
                     offPathBlock
                     hooksBlock
+                    mcpBlock
                     localMoshBlock
                     pathHint
                     skipToggle
@@ -322,6 +323,39 @@ struct UpgradePanelView: View {
                 hookInstallResult = error.localizedDescription
             }
             isInstallingHooks = false
+        }
+    }
+
+    // MARK: Serveur MCP (§10)
+
+    /// Claude Code tourne sur le serveur, Latch ici. Le pont est le `-R` que
+    /// porte déjà la connexion des hooks : le serveur atteint Latch sur son
+    /// propre localhost, et rien n'est exposé au réseau.
+    @ViewBuilder
+    private var mcpBlock: some View {
+        if app.mcp.isRunning {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Piloter Latch depuis Claude Code", systemImage: "point.3.connected.trianglepath.dotted")
+                    .labelStyle(SectionLabelStyle())
+
+                Text("À lancer une fois sur \(server.sshAlias), pendant qu'une "
+                    + "session Latch y est ouverte — c'est elle qui porte le "
+                    + "tunnel. Claude Code pourra alors ouvrir un onglet, "
+                    + "lancer une commande ou afficher un fichier.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchTextDim)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                CommandBox(command: app.mcp.claudeRegistrationCommand)
+                actions(for: app.mcp.claudeRegistrationCommand)
+
+                Text("Le jeton est tiré à chaque lancement de Latch : relancer "
+                    + "l'app invalide l'accès précédent, et cette commande est "
+                    + "à rejouer.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.latchTextFaint)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

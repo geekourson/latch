@@ -10,11 +10,27 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.3.** Raccourcis persistés en JSON, barre latérale, onglets, écran du
-builder, import de thèmes, sonde serveur et cascade de dégradation, reconnexion
-au réveil, drivers de connexion et hooks Claude Code. Reste la v0.4 : `tmux -CC`
-pour peupler la barre latérale avec les vraies fenêtres tmux, et le serveur MCP.
-Voir la [feuille de route](SPEC.md#12-feuille-de-route).
+**v0.4.** La feuille de route est parcourue : raccourcis persistés en JSON,
+barre latérale, onglets, écran du builder, import de thèmes, sonde serveur et
+cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
+Claude Code, fenêtres tmux réelles et serveur MCP.
+
+### La barre latérale montre les vraies fenêtres
+
+Sous chaque session ouverte, Latch liste les fenêtres que tmux a réellement, avec
+ce qui tourne dedans. Un clic bascule la session distante dessus ; le terminal
+suit tout seul, c'est tmux qui décide de ce qu'il affiche.
+
+### Claude Code peut piloter Latch
+
+Un serveur MCP tourne dans l'app et expose quatre outils : lister les onglets,
+ouvrir un raccourci, lancer une commande, afficher un fichier. Claude Code, qui
+tourne sur le serveur, l'atteint par un `-R` porté par la connexion des hooks —
+tout passe par le tunnel, rien n'est exposé au réseau.
+
+Le serveur n'écoute que sur `127.0.0.1` et exige un jeton tiré à chaque
+lancement de Latch. La commande `claude mcp add` à jouer sur le serveur est
+affichée dans le panneau d'amélioration.
 
 ### La session se rattrape toute seule
 
