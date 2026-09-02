@@ -212,3 +212,133 @@ final class SSHConfigTests: XCTestCase {
         XCTAssertEqual(SSHConfig.hosts(in: "# rien que des commentaires"), [])
     }
 }
+
+// MARK: - Compatibilité des fichiers entre versions
+
+@MainActor
+final class StoreCompatibilityTests: XCTestCase {
+
+    private var fileURL: URL!
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latch-compat-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        fileURL = directory.appendingPathComponent("shortcuts.json")
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func load(_ json: String) throws -> SessionStore {
+        try json.write(to: fileURL, atomically: true, encoding: .utf8)
+        return SessionStore(fileURL: fileURL, seedFromSSHConfig: false)
+    }
+
+    /// Le fichier exact qu'écrivait la v0.2, avant que `ProbeResult` gagne
+    /// `offPathTools` et que le document gagne thèmes et réglages. Il a
+    /// réellement cassé l'app une fois : la barre latérale s'est vidée.
+    func testAFileFromAnEarlierVersionStillLoads() throws {
+        let store = try load(
+            """
+            {
+              "version": 1,
+              "servers": [{
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "billy",
+                "sshAlias": "billy",
+                "skipUpgradePrompt": false,
+                "probedAt": 810037617.595638,
+                "probe": {
+                  "hasTmux": true, "tmuxVersion": "3.2a",
+                  "hasMoshServer": false, "hasClaude": false, "osID": "ubuntu"
+                }
+              }],
+              "shortcuts": [{
+                "id": "22222222-2222-2222-2222-222222222222",
+                "name": "API · Claude",
+                "preflight": [],
+                "windows": [],
+                "connection": {
+                  "transport": "mosh", "host": "billy", "tmuxSession": "api",
+                  "initialCommand": {"shell": {}},
+                  "keepShellOnExit": true, "controlMode": false
+                }
+              }]
+            }
+            """
+        )
+
+        XCTAssertNil(store.lastError, store.lastError ?? "")
+        XCTAssertEqual(store.servers.map(\.name), ["billy"])
+        XCTAssertEqual(store.servers.first?.probe?.tmuxVersion, "3.2a")
+        XCTAssertEqual(store.servers.first?.probe?.offPathTools, [:])
+        XCTAssertEqual(store.shortcuts.map(\.name), ["API · Claude"])
+        XCTAssertEqual(store.preferences, Preferences())
+        XCTAssertTrue(store.themes.isEmpty)
+    }
+
+    /// Le strict minimum : un raccourci n'a besoin que de sa connexion, un
+    /// serveur que de son alias. Tout le reste doit se déduire.
+    func testTheBareMinimumIsEnough() throws {
+        let store = try load(
+            """
+            {
+              "servers": [{"sshAlias": "billy"}],
+              "shortcuts": [{"connection": {"host": "billy"}}]
+            }
+            """
+        )
+        XCTAssertNil(store.lastError, store.lastError ?? "")
+        XCTAssertEqual(store.servers.first?.name, "billy", "le nom retombe sur l'alias")
+        XCTAssertEqual(store.shortcuts.first?.connection.tmuxSession, "session")
+        XCTAssertEqual(store.shortcuts.first?.connection.transport, .mosh)
+        XCTAssertNotNil(store.shortcuts.first?.id, "un identifiant est fabriqué")
+    }
+
+    /// Une clé inconnue vient d'une version plus récente : on l'ignore plutôt
+    /// que de refuser le fichier.
+    func testUnknownKeysAreIgnored() throws {
+        let store = try load(
+            """
+            {
+              "version": 99,
+              "servers": [{"sshAlias": "billy", "quelqueChoseDeFutur": true}],
+              "shortcuts": [],
+              "cequonNeConnaitPas": [1, 2, 3]
+            }
+            """
+        )
+        XCTAssertNil(store.lastError, store.lastError ?? "")
+        XCTAssertEqual(store.servers.count, 1)
+    }
+
+    /// Ce qui n'a pas de repli sensé reste obligatoire : un raccourci sans
+    /// connexion est cassé. Il est écarté **seul** — les autres survivent — et
+    /// son éviction est annoncée plutôt que silencieuse.
+    func testABrokenShortcutIsSkippedAloneAndReported() throws {
+        let store = try load(
+            """
+            {
+              "shortcuts": [
+                {"name": "orphelin"},
+                {"name": "bon", "connection": {"host": "billy", "tmuxSession": "api"}}
+              ]
+            }
+            """
+        )
+        XCTAssertEqual(store.shortcuts.map(\.name), ["bon"])
+        XCTAssertNotNil(store.lastError)
+        XCTAssertTrue(store.lastError?.contains("1 entrée") ?? false, store.lastError ?? "")
+    }
+
+    /// Et le fichier reste intact tant que rien n'a été réenregistré : on ne
+    /// détruit pas ce qu'on n'a pas su lire.
+    func testTheFileIsNotRewrittenAfterSkipping() throws {
+        let json = #"{"shortcuts": [{"name": "orphelin"}]}"#
+        _ = try load(json)
+        XCTAssertEqual(try String(contentsOf: fileURL, encoding: .utf8), json)
+    }
+}

@@ -53,6 +53,45 @@ final class SessionStore: ObservableObject {
         var shortcuts: [Shortcut] = []
         var themes: [Theme] = []
         var preferences = Preferences()
+
+        enum CodingKeys: String, CodingKey {
+            case version, servers, shortcuts, themes, preferences
+        }
+
+        init(
+            version: Int = 1,
+            servers: [Server] = [],
+            shortcuts: [Shortcut] = [],
+            themes: [Theme] = [],
+            preferences: Preferences = Preferences()
+        ) {
+            self.version = version
+            self.servers = servers
+            self.shortcuts = shortcuts
+            self.themes = themes
+            self.preferences = preferences
+        }
+
+        /// Combien d'entrées ont été écartées parce qu'illisibles.
+        var skippedEntries = 0
+
+        /// Tolérant aux absences : une version antérieure de Latch n'écrivait
+        /// ni thèmes ni réglages, et son fichier doit rester lisible. Une
+        /// entrée cassée est écartée seule, pas avec toute la liste.
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            version = container.value(.version, or: 1)
+            preferences = container.value(.preferences, or: Preferences())
+
+            let servers = container.lenient(.servers, of: Server.self)
+            let shortcuts = container.lenient(.shortcuts, of: Shortcut.self)
+            let themes = container.lenient(.themes, of: Theme.self)
+
+            self.servers = servers.values
+            self.shortcuts = shortcuts.values
+            self.themes = themes.values
+            skippedEntries = servers.skipped + shortcuts.skipped + themes.skipped
+        }
     }
 
     // MARK: - Cycle de vie
@@ -77,6 +116,13 @@ final class SessionStore: ObservableObject {
             shortcuts = document.shortcuts
             themes = document.themes
             preferences = document.preferences
+
+            // Ce qu'on a dû écarter se dit : disparaître en silence serait pire
+            // que de refuser le fichier.
+            if document.skippedEntries > 0 {
+                lastError = "\(document.skippedEntries) entrée(s) illisible(s) ont été ignorées. "
+                    + "Le fichier n'a pas encore été réécrit : \(fileURL.path)"
+            }
         } catch {
             // Un fichier illisible ne doit pas empêcher l'app de démarrer, et
             // surtout pas être écrasé en silence : on le laisse en place et on
