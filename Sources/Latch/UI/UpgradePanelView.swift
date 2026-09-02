@@ -24,6 +24,10 @@ struct UpgradePanelView: View {
     @State private var isInstallingHooks = false
     @State private var hookInstallResult: String?
     @State private var hooksInstalled: Bool?
+    @State private var keyWorks: Bool?
+    @State private var storedPassword = ""
+    @State private var hasStoredPassword = false
+    @State private var passwordError: String?
 
     private var plan: UpgradePlan {
         ServerUpgradePlanner.plan(for: target.probe, wantsMosh: target.wantsMosh)
@@ -57,6 +61,7 @@ struct UpgradePanelView: View {
                     }
                     offPathBlock
                     if server != nil {
+                        authenticationBlock
                         hooksBlock
                         mcpBlock
                         localMoshBlock
@@ -71,6 +76,10 @@ struct UpgradePanelView: View {
         .background(Color.latchSurface)
         .task(id: target.id) {
             guard let alias = target.alias else { return }
+            hasStoredPassword = Keychain.hasPassword(
+                alias: alias, account: SSHConfig.user(for: alias)
+            )
+            keyWorks = await SSHKeySetup.worksWithoutPassword(alias: alias)
             hooksInstalled = await HookInstaller.isInstalled(on: alias)
         }
     }
@@ -257,6 +266,135 @@ struct UpgradePanelView: View {
                     .foregroundStyle(Color.latchTextDim)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    // MARK: Authentification (§11)
+
+    /// L'authentification par clé est la seule que la SPEC accepte par défaut.
+    /// Quand elle ne marche pas encore, on propose de la mettre en place —
+    /// pas de contourner le problème avec un mot de passe.
+    @ViewBuilder
+    private var authenticationBlock: some View {
+        if let alias = target.alias {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
+                    Label("Authentification", systemImage: "key")
+                        .labelStyle(SectionLabelStyle())
+                    if keyWorks == true {
+                        Text("par clé")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.latchSuccess)
+                    } else if keyWorks == false {
+                        Text("mot de passe requis")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.latchAccent)
+                    }
+                }
+
+                if keyWorks == false {
+                    Text(SSHKeySetup.explanation)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.latchTextDim)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    CommandBox(command: SSHKeySetup.setupCommand(alias: alias))
+
+                    HStack(spacing: 8) {
+                        Button("Configurer une clé…") {
+                            app.configureKey(on: alias)
+                            app.upgradingTarget = nil
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.latchAccent)
+                        .controlSize(.small)
+
+                        Button("Copier") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(
+                                SSHKeySetup.setupCommand(alias: alias), forType: .string
+                            )
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Spacer()
+                    }
+                    .font(.system(size: 11))
+
+                    if SSHKeySetup.hasKey() {
+                        Text("Une clé existe déjà (\(SSHKeySetup.privateKeyPath)) : elle sera "
+                            + "réutilisée, jamais écrasée.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.latchTextFaint)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    passwordFallback(alias: alias)
+                }
+            }
+        }
+    }
+
+    /// Le dernier recours du §11. Le mot de passe va dans le trousseau, jamais
+    /// dans le fichier de configuration, et Latch l'écrit sur le pseudo-terminal
+    /// après avoir vu l'invite — jamais sur une ligne de commande.
+    @ViewBuilder
+    private func passwordFallback(alias: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Divider().overlay(Color.latchBorder).padding(.vertical, 2)
+
+            Text(hasStoredPassword
+                ? "Un mot de passe est enregistré dans le trousseau pour cet hôte."
+                : "Si cet hôte n'accepte décidément que les mots de passe, "
+                    + "Latch peut en garder un dans le trousseau du système.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color.latchTextFaint)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                SecureField("Mot de passe", text: $storedPassword)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11.5))
+                    .padding(7)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(Color.latchBackground))
+
+                Button(hasStoredPassword ? "Remplacer" : "Enregistrer") {
+                    savePassword(for: alias)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(storedPassword.isEmpty)
+
+                if hasStoredPassword {
+                    Button("Oublier") {
+                        Keychain.remove(alias: alias, account: SSHConfig.user(for: alias))
+                        hasStoredPassword = false
+                        passwordError = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchAccent)
+                }
+            }
+
+            if let passwordError {
+                Text(passwordError)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.latchAccent)
+            }
+        }
+    }
+
+    private func savePassword(for alias: String) {
+        do {
+            try Keychain.store(
+                storedPassword, alias: alias, account: SSHConfig.user(for: alias)
+            )
+            storedPassword = ""
+            hasStoredPassword = true
+            passwordError = nil
+        } catch {
+            passwordError = error.localizedDescription
         }
     }
 

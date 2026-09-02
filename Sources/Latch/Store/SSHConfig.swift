@@ -47,4 +47,35 @@ enum SSHConfig {
         guard let contents = try? String(contentsOf: url, encoding: .utf8) else { return [] }
         return hosts(in: contents)
     }
+
+    /// La configuration **effective** d'un alias, telle que ssh l'appliquerait :
+    /// `ssh -G` déroule `HostName`, `User`, `Match`, les inclusions. On ne
+    /// réimplémente pas ce fichier, on demande à ssh.
+    static func effectiveValue(_ keyword: String, for alias: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = ["-G", alias]
+
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return nil }
+
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        let wanted = keyword.lowercased()
+        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            let fields = line.split(separator: " ", maxSplits: 1)
+            guard fields.count == 2, fields[0].lowercased() == wanted else { continue }
+            let value = String(fields[1]).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    /// Le compte distant, pour retrouver la bonne entrée du trousseau.
+    static func user(for alias: String) -> String {
+        effectiveValue("user", for: alias) ?? NSUserName()
+    }
 }

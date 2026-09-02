@@ -124,25 +124,7 @@ struct MoshDriver: ConnectionDriver {
     /// `ssh -G` rend la configuration effective, celle que ssh utiliserait
     /// vraiment. On ne réimplémente pas `~/.ssh/config`.
     static func sshHostName(for alias: String) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = ["-G", alias]
-
-        let out = Pipe()
-        process.standardOutput = out
-        process.standardError = FileHandle.nullDevice
-        guard (try? process.run()) != nil else { return nil }
-
-        let data = out.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
-            let fields = line.split(separator: " ", maxSplits: 1)
-            if fields.count == 2, fields[0] == "hostname" {
-                return String(fields[1]).trimmingCharacters(in: .whitespaces)
-            }
-        }
-        return nil
+        SSHConfig.effectiveValue("hostname", for: alias)
     }
 
     /// Une adresse déjà numérique traverse sans requête DNS.

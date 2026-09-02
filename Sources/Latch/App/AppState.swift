@@ -140,11 +140,37 @@ final class AppState: ObservableObject {
                 environment: plan.environment,
                 notice: plan.notice
             )
+            attachStoredPassword(to: session)
             tabs.append(session)
             selectedTabID = session.id
             followHooks(on: shortcut.connection.host)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// SPEC §11 : un mot de passe n'est utilisé que s'il a été rangé dans le
+    /// trousseau, et il n'est lu qu'au moment où l'invite apparaît. Rien n'est
+    /// gardé en mémoire par la session.
+    private func attachStoredPassword(to session: TerminalSession) {
+        let alias = session.host
+        guard !alias.isEmpty else { return }
+        let account = SSHConfig.user(for: alias)
+        guard Keychain.hasPassword(alias: alias, account: account) else { return }
+        session.passwordProvider = { Keychain.password(alias: alias, account: account) }
+    }
+
+    /// Ouvre un panneau local et y **exécute** la configuration de clé, sous
+    /// les yeux de l'utilisateur : `ssh-copy-id` doit demander le mot de passe
+    /// distant dans un vrai TTY (§11).
+    func configureKey(on alias: String) {
+        let session = openLocalShell(named: "clé · \(alias)")
+        let command = SSHKeySetup.setupCommand(alias: alias)
+        Task {
+            // Le temps que le shell rende la main. Il n'y a pas de signal
+            // fiable sans analyser l'invite, et l'utilisateur voit tout.
+            try? await Task.sleep(for: .milliseconds(1200))
+            session.run(command)
         }
     }
 

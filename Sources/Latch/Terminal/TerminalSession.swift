@@ -45,6 +45,11 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     var policy = ReconnectionPolicy()
 
+    /// Fourni par l'app quand un mot de passe est enregistré au trousseau
+    /// (§11). Il n'est lu qu'au moment de répondre à une invite, et n'est
+    /// jamais conservé par la session.
+    var passwordProvider: (() -> String?)?
+
     // MARK: Interne
 
     private var pty = PTYProcess()
@@ -52,6 +57,8 @@ final class TerminalSession: ObservableObject, Identifiable {
     private let outputSubject = PassthroughSubject<Data, Never>()
 
     private var lastGeometry: (rows: UInt16, cols: UInt16) = (24, 80)
+    private var promptDetector = PasswordPromptDetector()
+    private var launchedAt: Date?
     private var connectedAt: Date?
     private var reconnectAttempt = 0
     private var reconnectTask: Task<Void, Never>?
@@ -97,7 +104,21 @@ final class TerminalSession: ObservableObject, Identifiable {
         launch()
     }
 
+    /// SPEC §11 : le mot de passe part **sur le PTY**, après détection de
+    /// l'invite, jamais en argument de commande. Il n'est ni journalisé ni
+    /// gardé : on le demande, on l'écrit, on l'oublie.
+    private func answerPasswordPromptIfNeeded(_ data: Data) {
+        guard let passwordProvider, let launchedAt else { return }
+        let elapsed = Date().timeIntervalSince(launchedAt)
+        guard promptDetector.shouldAnswer(after: String(decoding: data, as: UTF8.self),
+                                          elapsed: elapsed)
+        else { return }
+        guard let password = passwordProvider() else { return }
+        pty.send(Data((password + "\n").utf8))
+    }
+
     private func launch() {
+        launchedAt = Date()
         connection = .connecting
         do {
             try pty.start(
@@ -120,7 +141,10 @@ final class TerminalSession: ObservableObject, Identifiable {
     private func bind(_ pty: PTYProcess) {
         ptyBindings.removeAll()
         pty.output
-            .sink { [weak self] in self?.outputSubject.send($0) }
+            .sink { [weak self] data in
+                self?.outputSubject.send(data)
+                self?.answerPasswordPromptIfNeeded(data)
+            }
             .store(in: &ptyBindings)
         pty.state
             .sink { [weak self] in self?.handle($0) }
@@ -170,6 +194,13 @@ final class TerminalSession: ObservableObject, Identifiable {
     /// reste en fin de ligne, l'utilisateur appuie lui-même sur Entrée (§6).
     func type(_ text: String) {
         pty.send(Data(text.utf8))
+    }
+
+    /// Écrit **et** exécute. C'est ce que le §11 demande pour la configuration
+    /// de clé : `ssh-copy-id` doit réclamer son mot de passe dans un vrai TTY,
+    /// sous les yeux de l'utilisateur.
+    func run(_ command: String) {
+        type(command + "\n")
     }
 
     func resize(rows: Int, cols: Int) {
@@ -245,6 +276,8 @@ final class TerminalSession: ObservableObject, Identifiable {
         pty = PTYProcess()
         bind(pty)
         connectedAt = nil
+        launchedAt = Date()
+        promptDetector.reset()
 
         do {
             try pty.start(
