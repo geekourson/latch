@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sélectionner Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Outils de compilation
+        run: |
+          brew install xcodegen openssl@3
+          xcodebuild -downloadComponent MetalToolchain || true
+
+      # SPEC §7 : mosh-client est embarqué dans le bundle pour ne pas exiger
+      # Homebrew de l'utilisateur. Il est compilé ici, en universel.
+      - name: Compiler mosh-client
+        run: Scripts/build-mosh-client.sh build/mosh arm64 x86_64
+
+      - name: Générer le projet
+        run: xcodegen generate
+
+      - name: Compiler Latch
+        run: |
+          xcodebuild archive \
+            -project Latch.xcodeproj \
+            -scheme Latch \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath build/Latch.xcarchive \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Embarquer mosh-client
+        run: |
+          APP=build/Latch.xcarchive/Products/Applications/Latch.app
+          cp build/mosh/mosh-client "$APP/Contents/MacOS/mosh-client"
+          chmod 755 "$APP/Contents/MacOS/mosh-client"
+
+      # La signature et la notarisation exigent un compte développeur Apple
+      # (99 €/an). Sans les secrets, la release sort non signée : le premier
+      # lancement demandera alors un clic droit → Ouvrir.
+      - name: Signer et notariser
+        id: sign
+        if: ${{ secrets.MACOS_CERTIFICATE != '' }}
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP=build/Latch.xcarchive/Products/Applications/Latch.app
+
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          security import /tmp/certificate.p12 -k build.keychain \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
+
+          # Le binaire embarqué se signe d'abord : un bundle se signe de
+          # l'intérieur vers l'extérieur.
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_SIGNING_IDENTITY" "$APP/Contents/MacOS/mosh-client"
+          codesign --force --options runtime --timestamp --deep \
+            --sign "$MACOS_SIGNING_IDENTITY" "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+
+          hdiutil create -volname Latch -srcfolder "$APP" -ov -format UDZO build/Latch.dmg
+          codesign --force --sign "$MACOS_SIGNING_IDENTITY" build/Latch.dmg
+
+          xcrun notarytool submit build/Latch.dmg \
+            --apple-id "$NOTARY_APPLE_ID" \
+            --password "$NOTARY_PASSWORD" \
+            --team-id "$NOTARY_TEAM_ID" \
+            --wait
+          xcrun stapler staple build/Latch.dmg
+
+      - name: Empaqueter sans signature
+        if: ${{ secrets.MACOS_CERTIFICATE == '' }}
+        run: |
+          APP=build/Latch.xcarchive/Products/Applications/Latch.app
+          hdiutil create -volname Latch -srcfolder "$APP" -ov -format UDZO build/Latch.dmg
+
+      # GPLv3 : le binaire mosh embarqué voyage avec ses sources et le script
+      # exact qui l'a produit.
+      - name: Publier
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Latch.dmg
+            build/mosh/mosh-*.tar.gz
+            build/mosh/build-mosh-client.sh
+            build/mosh/SHA256SUMS
+          body: |
+            ## Latch
+
+            `Latch.dmg` contient l'application. Si elle n'est pas notarisée, le
+            premier lancement demande un clic droit → **Ouvrir**.
+
+            ### mosh embarqué et GPLv3
+
+            `Latch.app/Contents/MacOS/mosh-client` provient de
+            [mosh](https://mosh.org), sous **GPL-3.0-or-later**. Latch, sous
+            licence MIT, se contente de le lancer comme exécutable séparé.
+
+            Conformément à la GPLv3, cette release contient les sources exactes
+            de mosh (`mosh-*.tar.gz`), le script qui l'a compilé
+            (`build-mosh-client.sh`) et leurs sommes de contrôle
+            (`SHA256SUMS`).

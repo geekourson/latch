@@ -101,14 +101,19 @@ final class AppState: ObservableObject {
         let probe = store.probe(forHost: shortcut.connection.host)
         let degradation = ServerCapabilities.degradation(for: shortcut, probe: probe)
 
+        // Le driver du §3.2 construit la commande et, pour mosh, fait sa
+        // poignée de main avant de la rendre.
+        let driver = ConnectionDrivers.driver(for: shortcut, degradation: degradation)
         do {
-            let command = try CommandBuilder.build(shortcut, degradation: degradation)
+            let plan = try await driver.plan(for: shortcut, degradation: degradation)
             let session = TerminalSession(
                 name: shortcut.name,
-                command: command,
+                command: plan.command,
                 shortcutID: shortcut.id,
                 host: shortcut.connection.host,
-                degradation: degradation
+                degradation: degradation,
+                environment: plan.environment,
+                notice: plan.notice
             )
             tabs.append(session)
             selectedTabID = session.id

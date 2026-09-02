@@ -42,6 +42,7 @@ struct UpgradePanelView: View {
                     if let claude = plan.claudeCommand {
                         claudeBlock(claude)
                     }
+                    localMoshBlock
                     pathHint
                     skipToggle
                 }
@@ -190,6 +191,30 @@ struct UpgradePanelView: View {
 
             CommandBox(command: command)
             actions(for: command)
+        }
+    }
+
+    // MARK: Côté Mac
+
+    /// Le §6 ne parle que du serveur, mais mosh a besoin des deux bouts. Une
+    /// compilation locale de Latch n'embarque pas `mosh-client` : autant le
+    /// dire ici plutôt que de laisser une connexion échouer sans raison
+    /// apparente.
+    @ViewBuilder
+    private var localMoshBlock: some View {
+        if case .absent = MoshClient.locate() {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Sur ce Mac", systemImage: "laptopcomputer")
+                    .labelStyle(SectionLabelStyle())
+
+                Text(MoshClient.missingLocallyMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchTextDim)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                CommandBox(command: "brew install mosh")
+                actions(for: "brew install mosh")
+            }
         }
     }
 

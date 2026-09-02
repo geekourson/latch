@@ -10,10 +10,22 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.2** — c'est une app. Raccourcis persistés en JSON, barre latérale, onglets,
-écran du builder, et la sonde serveur du §6 avec sa cascade de dégradation.
-Reste pour la v0.3 : le binaire mosh embarqué, la reconnexion au réveil et les
-hooks Claude Code. Voir la [feuille de route](SPEC.md#12-feuille-de-route).
+**v0.3 en cours.** La v0.2 est complète — raccourcis persistés en JSON, barre
+latérale, onglets, écran du builder, import de thèmes, sonde serveur et cascade
+de dégradation. La v0.3 apporte la reconnexion au réveil et la couche des
+drivers de connexion ; restent les hooks Claude Code. Voir la
+[feuille de route](SPEC.md#12-feuille-de-route).
+
+### La session se rattrape toute seule
+
+Le Mac s'endort : rien n'est tué, les sessions sont simplement marquées. Il se
+réveille : un process encore vivant — le cas normal avec mosh — est laissé
+tranquille, un process mort est relancé avec **exactement la même commande**,
+que `tmux new -A` transforme en la session qui était là.
+
+Les tentatives suivent un backoff exponentiel plafonné à 30 secondes et
+s'arrêtent après trois échecs, laissant un bouton « Réessayer » plutôt qu'une
+boucle silencieuse sur une authentification refusée.
 
 ## Ce que fait Latch
 
@@ -174,9 +186,26 @@ Quatre couches, strictement séparées — aucune ne connaît celle du dessus :
 - [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — le seul
   émulateur de terminal embarqué. Il tire lui-même `swift-argument-parser`.
 
-Le binaire `mosh-client` sera embarqué dans le bundle en v0.3, pour ne pas
-exiger Homebrew de l'utilisateur ; sa version exacte sera notée ici, mosh étant
-sensible aux écarts entre client et serveur.
+### mosh et la GPLv3
+
+Les binaires publiés embarquent **mosh-client 1.4.0** dans
+`Latch.app/Contents/MacOS/mosh-client`, invoqué par chemin absolu et jamais via
+le `PATH` — l'objectif étant de ne pas exiger Homebrew de l'utilisateur. La
+version est figée : mosh est sensible aux écarts entre client et serveur.
+
+mosh est sous **GPL-3.0-or-later**. Latch, sous licence MIT, se contente de le
+lancer comme exécutable séparé : de la simple agrégation, qui ne change pas la
+licence de Latch. En revanche chaque release publie, à côté du `.dmg`, les
+sources exactes de mosh, le script qui l'a compilé
+([`Scripts/build-mosh-client.sh`](Scripts/build-mosh-client.sh)) et leurs
+sommes de contrôle. C'est ce que la GPLv3 exige, et c'est aussi ce qui ferme
+définitivement la porte du Mac App Store — le `.dmg` notarisé reste le seul
+canal de distribution.
+
+Une compilation locale n'embarque rien : Latch retombe alors sur le `mosh` du
+système s'il est installé, et le dit dans la barre d'état. Sans mosh nulle
+part, le panneau d'amélioration propose `brew install mosh` et le transport ssh
+reste disponible.
 
 ## Distribution
 

@@ -36,6 +36,12 @@ final class TerminalSession: ObservableObject, Identifiable {
     let host: String
     /// Ce que la sonde a imposé de perdre en route (§6).
     let degradation: Degradation
+    /// Variables ajoutées à l'environnement du process. C'est par là que passe
+    /// la clé de session mosh : jamais par la ligne de commande, où n'importe
+    /// quel `ps` la lirait.
+    let environment: [String: String]
+    /// Remarque du driver, affichée discrètement (transport de repli, etc.).
+    let notice: String?
 
     var policy = ReconnectionPolicy()
 
@@ -68,13 +74,17 @@ final class TerminalSession: ObservableObject, Identifiable {
         command: String,
         shortcutID: Shortcut.ID? = nil,
         host: String = "",
-        degradation: Degradation = .none
+        degradation: Degradation = .none,
+        environment: [String: String] = [:],
+        notice: String? = nil
     ) {
         self.name = name
         self.command = command
         self.shortcutID = shortcutID
         self.host = host
         self.degradation = degradation
+        self.environment = environment
+        self.notice = notice
         self.title = name
         bind(pty)
     }
@@ -90,10 +100,21 @@ final class TerminalSession: ObservableObject, Identifiable {
     private func launch() {
         connection = .connecting
         do {
-            try pty.start(command: command, rows: lastGeometry.rows, cols: lastGeometry.cols)
+            try pty.start(
+                command: command,
+                rows: lastGeometry.rows,
+                cols: lastGeometry.cols,
+                environment: mergedEnvironment
+            )
         } catch {
             connection = .failed(reason: error.localizedDescription)
         }
+    }
+
+    /// L'environnement du process, augmenté de celui du driver.
+    private var mergedEnvironment: [String: String] {
+        guard !environment.isEmpty else { return ProcessInfo.processInfo.environment }
+        return ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
     }
 
     private func bind(_ pty: PTYProcess) {
@@ -226,7 +247,12 @@ final class TerminalSession: ObservableObject, Identifiable {
         connectedAt = nil
 
         do {
-            try pty.start(command: command, rows: lastGeometry.rows, cols: lastGeometry.cols)
+            try pty.start(
+                command: command,
+                rows: lastGeometry.rows,
+                cols: lastGeometry.cols,
+                environment: mergedEnvironment
+            )
         } catch {
             failOrRetry(reason: error.localizedDescription)
         }

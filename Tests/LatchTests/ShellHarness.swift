@@ -25,7 +25,19 @@ enum ShellHarness {
     /// - Returns: les arguments reçus par le premier de ces programmes appelé.
     static func arguments(of command: String) throws -> [String] {
         let directory = try stubDirectory()
+        let output = try run(command, prependingToPath: directory)
+        // Les arguments sont séparés par un octet nul : une chaîne de test
+        // contient un retour à la ligne, un découpage par lignes mentirait.
+        return output
+            .split(separator: 0, omittingEmptySubsequences: false)
+            .dropLast()
+            .map { String(decoding: $0, as: UTF8.self) }
+    }
 
+    /// Exécute une commande avec un répertoire en tête du `PATH` et rend sa
+    /// sortie brute. Sert aux fragments de shell qu'on veut voir tourner pour
+    /// de vrai plutôt que comparer à une chaîne écrite à la main.
+    static func run(_ command: String, prependingToPath directory: URL) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", command]
@@ -47,13 +59,14 @@ enum ShellHarness {
         try process.run()
         let data = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-
-        // Les arguments sont séparés par un octet nul : une chaîne de test
-        // contient un retour à la ligne, un découpage par lignes mentirait.
         return data
-            .split(separator: 0, omittingEmptySubsequences: false)
-            .dropLast()
-            .map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    /// Crée un faux binaire exécutable dans `directory`.
+    static func writeStub(named name: String, body: String, in directory: URL) throws {
+        let url = directory.appendingPathComponent(name)
+        try "#!/bin/sh\n\(body)\n".write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 
     // MARK: - Faux binaires

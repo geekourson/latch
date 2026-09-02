@@ -45,7 +45,11 @@ enum CommandBuilder {
     ///
     /// Un raccourci mal formé n'est jamais exécuté : on préfère une erreur de
     /// validation à une commande approximative.
-    static func build(_ shortcut: Shortcut, degradation: Degradation = .none) throws -> String {
+    static func build(
+        _ shortcut: Shortcut,
+        degradation: Degradation = .none,
+        moshBinary: String = "mosh"
+    ) throws -> String {
         if let custom = shortcut.customCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
            !custom.isEmpty {
             return custom
@@ -54,7 +58,9 @@ enum CommandBuilder {
         let issues = validate(shortcut)
         guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
 
-        let connection = try connectionCommand(shortcut, degradation: degradation)
+        let connection = try connectionCommand(
+            shortcut, degradation: degradation, moshBinary: moshBinary
+        )
         let steps = shortcut.preflight.map(preflightCommand) + [connection]
         return steps.joined(separator: " && ")
     }
@@ -65,7 +71,8 @@ enum CommandBuilder {
     /// connexion réussit toujours, quitte à perdre mosh ou tmux en route.
     static func connectionCommand(
         _ shortcut: Shortcut,
-        degradation: Degradation = .none
+        degradation: Degradation = .none,
+        moshBinary: String = "mosh"
     ) throws -> String {
         let issues = validate(shortcut)
         guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
@@ -105,17 +112,34 @@ enum CommandBuilder {
             return "et \(host) -c \(ShellQuoting.doubleQuoted(remote))"
 
         case .mosh:
-            // mosh sépare ses arguments de la commande distante par `--`, et
-            // exécute cette commande **directement**, sans shell. Un chemin
-            // qui demande à être développé (`~`, `$`) n'a donc personne pour
-            // le faire de l'autre côté — et le shell local, lui, le
-            // développerait avec *son* répertoire personnel. D'où le `sh -c`
-            // explicite dans ce cas, et seulement dans ce cas.
-            if needsRemoteShell(connection) {
-                return "mosh \(host) -- sh -c \(ShellQuoting.doubleQuoted(remote))"
-            }
-            return "mosh \(host) -- \(remote)"
+            // mosh sépare ses arguments de la commande distante par `--`.
+            return "\(ShellQuoting.quoted(moshBinary)) \(host) -- "
+                + remoteInvocation(connection, remote: remote)
         }
+    }
+
+    /// La commande distante telle qu'un `mosh` — ou un `mosh-server new -- …` —
+    /// doit la recevoir.
+    ///
+    /// mosh exécute cette commande **directement**, sans shell. Un chemin qui
+    /// demande à être développé (`~`, `$`) n'a donc personne pour le faire de
+    /// l'autre côté — et le shell local, lui, le développerait avec *son*
+    /// répertoire personnel. D'où le `sh -c` explicite dans ce cas, et
+    /// seulement dans ce cas.
+    static func remoteInvocation(_ shortcut: Shortcut) throws -> String {
+        let issues = validate(shortcut)
+        guard issues.isEmpty else { throw CommandBuilderError.invalid(issues) }
+        let connection = shortcut.connection
+        return remoteInvocation(
+            connection,
+            remote: tmuxInvocation(connection, windows: shortcut.windows)
+        )
+    }
+
+    private static func remoteInvocation(_ connection: Connection, remote: String) -> String {
+        needsRemoteShell(connection)
+            ? "sh -c \(ShellQuoting.doubleQuoted(remote))"
+            : remote
     }
 
     /// Dernier étage de la cascade : l'hôte n'a pas tmux, on ouvre un shell nu.

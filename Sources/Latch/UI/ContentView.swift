@@ -171,6 +171,12 @@ private struct SessionStatus: View {
                     .foregroundStyle(Color.latchTextFaint)
             }
 
+            if let notice = session.notice {
+                Text(notice)
+                    .foregroundStyle(Color.latchTextFaint)
+                    .lineLimit(1)
+            }
+
             Spacer()
 
             if session.size.cols > 0 {
