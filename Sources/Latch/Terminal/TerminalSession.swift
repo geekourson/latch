@@ -2,15 +2,18 @@
 //  TerminalSession.swift
 //  Latch
 //
-//  Le pont entre un `PTYProcess` et l'interface. En v0.1 la commande est codée
-//  en dur (SPEC §12) ; en v0.2 elle viendra du `CommandBuilder`.
+//  Le pont entre un `PTYProcess` et l'interface : un onglet, une commande, un
+//  pseudo-terminal. La commande vient du `CommandBuilder` ; cette classe ne
+//  sait pas la construire et ne cherche pas à l'interpréter.
 //
 
 import Combine
 import Foundation
 
 @MainActor
-final class TerminalSession: ObservableObject {
+final class TerminalSession: ObservableObject, Identifiable {
+
+    nonisolated let id = UUID()
 
     /// Titre annoncé par le terminal distant (séquence OSC 0/2).
     @Published private(set) var title: String
@@ -22,6 +25,12 @@ final class TerminalSession: ObservableObject {
     let name: String
     /// La commande exécutée localement via `/bin/sh -c`.
     let command: String
+    /// Le raccourci d'où vient cet onglet, s'il y en a un.
+    let shortcutID: Shortcut.ID?
+    /// L'alias de l'hôte, pour la pastille d'état de la barre latérale.
+    let host: String
+    /// Ce que la sonde a imposé de perdre en route (§6).
+    let degradation: Degradation
 
     private let pty = PTYProcess()
     private var cancellables = Set<AnyCancellable>()
@@ -29,9 +38,20 @@ final class TerminalSession: ObservableObject {
     /// Octets reçus du process, à pousser dans le terminal.
     var output: AnyPublisher<Data, Never> { pty.output }
 
-    init(name: String, command: String) {
+    var isRunning: Bool { state == .running }
+
+    init(
+        name: String,
+        command: String,
+        shortcutID: Shortcut.ID? = nil,
+        host: String = "",
+        degradation: Degradation = .none
+    ) {
         self.name = name
         self.command = command
+        self.shortcutID = shortcutID
+        self.host = host
+        self.degradation = degradation
         self.title = name
 
         pty.state
@@ -46,14 +66,18 @@ final class TerminalSession: ObservableObject {
         do {
             try pty.start(command: command, rows: rows, cols: cols)
         } catch {
-            // Rien de plus utile à faire en v0.1 : la gestion d'erreur riche
-            // arrive avec `ConnectionDriver` et ses états dégradés (SPEC §3.2).
             NSLog("Latch: échec du lancement de « \(command) » — \(error.localizedDescription)")
         }
     }
 
     func send(_ data: ArraySlice<UInt8>) {
         pty.send(Data(data))
+    }
+
+    /// Écrit une commande dans le terminal **sans l'exécuter** : le curseur
+    /// reste en fin de ligne, l'utilisateur appuie lui-même sur Entrée (§6).
+    func type(_ text: String) {
+        pty.send(Data(text.utf8))
     }
 
     func resize(rows: Int, cols: Int) {

@@ -8,11 +8,13 @@ import SwiftUI
 @main
 struct LatchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var app = AppState()
 
     var body: some Scene {
         WindowGroup("Latch") {
             ContentView()
-                .frame(minWidth: 720, minHeight: 420)
+                .environmentObject(app)
+                .frame(minWidth: 860, minHeight: 460)
                 .preferredColorScheme(.dark)
         }
         .windowStyle(.hiddenTitleBar)
