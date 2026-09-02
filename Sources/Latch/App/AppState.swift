@@ -350,8 +350,45 @@ final class AppState: ObservableObject {
 
     /// Bascule la session distante sur cette fenêtre. Le terminal suit tout
     /// seul : c'est tmux qui décide de ce qu'il affiche.
+    ///
+    /// Encore faut-il qu'un terminal soit attaché. Cliquer une fenêtre d'une
+    /// session fermée n'envoyait qu'un `select-window` dans le vide : il
+    /// fallait d'abord cliquer la session, ce que rien n'indiquait. La ligne
+    /// ouvre donc la session au passage, comme on s'y attend.
     func select(_ window: LiveWindow, on host: String) {
+        let isAttached = tab(forSession: window.session, on: host) != nil
+        guard isAttached else {
+            guard let shortcut = shortcut(forSession: window.session, on: host) else {
+                // Une session orpheline n'a pas de raccourci à ouvrir : on
+                // bascule quand même, pour qui l'adopterait ensuite.
+                inspectors[host]?.select(window)
+                return
+            }
+            Task {
+                await open(shortcut)
+                // tmux vient d'attacher : la fenêtre choisie est celle où
+                // l'attachement a atterri, pas forcément celle qu'on visait.
+                inspectors[host]?.select(window)
+            }
+            return
+        }
+        focusTab(session: window.session, on: host)
         inspectors[host]?.select(window)
+    }
+
+    /// Met au premier plan l'onglet attaché à cette session tmux.
+    private func focusTab(session: String, on host: String) {
+        guard let tab = tab(forSession: session, on: host) else { return }
+        selectedTabID = tab.id
+    }
+
+    /// L'onglet attaché à une session tmux, s'il y en a un. Un onglet ne
+    /// connaît que son raccourci : c'est lui qui porte le nom de la session.
+    private func tab(forSession session: String, on host: String) -> TerminalSession? {
+        tabs.first { tab in
+            guard tab.host == host, let id = tab.shortcutID else { return false }
+            return store.shortcut(id: id)?.connection.tmuxSession == session
+        }
     }
 
     /// Le dépôt du panneau actif de la session d'un onglet (§9.1).
