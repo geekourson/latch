@@ -82,11 +82,15 @@ struct LocalDriver: ConnectionDriver {
     func plan(
         for shortcut: Shortcut, degradation: Degradation, toolPaths: [String: String]
     ) async throws -> LaunchPlan {
-        LaunchPlan(
+        var plan = LaunchPlan(
             command: try CommandBuilder.build(
                 shortcut, degradation: degradation, toolPaths: toolPaths
             )
         )
+        if degradation == .tmuxMissing, shortcut.connection.transport == .local {
+            plan.notice = LocalTools.missingTmuxMessage
+        }
+        return plan
     }
 }
 

@@ -20,8 +20,9 @@ final class AppState: ObservableObject {
 
     /// Le raccourci en cours d'édition dans l'écran du builder (§9.2).
     @Published var editedShortcut: Shortcut?
-    /// Le serveur dont le panneau d'amélioration est ouvert (§6).
-    @Published var upgradingServerID: Server.ID?
+    /// L'hôte dont le panneau d'amélioration est ouvert (§6) — un serveur, ou
+    /// le Mac lui-même pour les raccourcis locaux.
+    @Published var upgradingTarget: UpgradeTarget?
     /// Erreur de validation ou d'ouverture, affichée sans bloquer.
     @Published var errorMessage: String?
 
@@ -114,7 +115,11 @@ final class AppState: ObservableObject {
             await store.probe(serverID: server.id)
         }
 
-        let probe = store.probe(forHost: shortcut.connection.host)
+        // Le Mac est un hôte comme un autre : un raccourci local mérite la même
+        // sonde, et la même cascade s'il manque tmux.
+        let probe = shortcut.connection.transport.isRemote
+            ? store.probe(forHost: shortcut.connection.host)
+            : LocalTools.probe()
         let degradation = ServerCapabilities.degradation(for: shortcut, probe: probe)
 
         // Le driver du §3.2 construit la commande et, pour mosh, fait sa
@@ -249,6 +254,16 @@ final class AppState: ObservableObject {
         return session
     }
 
+    /// Le même panneau, mais sur le Mac : une session locale s'installe ses
+    /// outils localement.
+    @discardableResult
+    func openLocalShell(named name: String) -> TerminalSession {
+        let session = TerminalSession(name: name, command: "exec $SHELL -l")
+        tabs.append(session)
+        selectedTabID = session.id
+        return session
+    }
+
     // MARK: - Fermeture
 
     func close(tabID: TerminalSession.ID) {
@@ -296,6 +311,14 @@ final class AppState: ObservableObject {
     var currentServer: Server? {
         guard let host = selectedTab?.host else { return nil }
         return store.servers.first { $0.sshAlias == host }
+    }
+
+    /// L'hôte que le bandeau propose d'améliorer : le serveur de l'onglet
+    /// courant, ou le Mac si cet onglet est local.
+    var currentTarget: UpgradeTarget? {
+        guard let session = selectedTab else { return nil }
+        if session.host.isEmpty { return .localMac }
+        return currentServer.map { .server($0) }
     }
 
     // MARK: - Édition

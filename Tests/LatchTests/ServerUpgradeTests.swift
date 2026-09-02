@@ -117,10 +117,29 @@ final class DegradationTests: XCTestCase {
         )
     }
 
-    func testLocalShortcutsIgnoreTheProbe() {
+    /// Le Mac est un hôte comme un autre : sans tmux, un raccourci local
+    /// échouait sur « /bin/sh: tmux: command not found ». Il dégrade
+    /// maintenant vers un shell, comme n'importe quel serveur.
+    func testLocalShortcutsAreDegradedToo() throws {
+        let degradation = ServerCapabilities.degradation(
+            for: shortcut(transport: .local), probe: probe(tmux: false, mosh: false)
+        )
+        XCTAssertEqual(degradation, .tmuxMissing)
+
+        var local = shortcut(transport: .local)
+        local.connection.host = ""
+        XCTAssertEqual(
+            try CommandBuilder.build(local, degradation: degradation),
+            "exec $SHELL"
+        )
+    }
+
+    /// Avec tmux, rien ne change : mosh n'a aucun sens en local et ne doit pas
+    /// déclencher de bandeau.
+    func testALocalShortcutWithTmuxIsNotDegraded() {
         XCTAssertEqual(
             ServerCapabilities.degradation(
-                for: shortcut(transport: .local), probe: probe(tmux: false, mosh: false)
+                for: shortcut(transport: .local), probe: probe(tmux: true, mosh: true)
             ),
             .none
         )
@@ -347,5 +366,52 @@ final class OffPathToolTests: XCTestCase {
             try CommandBuilder.build(claudeShortcut()),
             #"ssh -t billy "tmux new -A -s api 'claude --continue'""#
         )
+    }
+}
+
+// MARK: - Le Mac comme hôte du §6
+
+final class LocalUpgradeTests: XCTestCase {
+
+    /// Homebrew n'a pas de « -y » — il n'attend rien — et surtout pas de sudo :
+    /// brew refuse de tourner en root.
+    func testMacOSJoinsTheDistributionTable() {
+        XCTAssertEqual(
+            ServerUpgradePlanner.installCommand(osID: "macos", packages: ["tmux"]),
+            "brew install tmux"
+        )
+        XCTAssertFalse(
+            ServerUpgradePlanner.installCommand(osID: "macos", packages: ["tmux"])?
+                .contains("sudo") ?? true
+        )
+    }
+
+    /// mosh n'a aucun sens sur une session qui n'ouvre pas de connexion : la
+    /// commande locale ne doit proposer que tmux.
+    func testALocalPlanNeverOffersMosh() {
+        let probe = ProbeResult(hasTmux: false, hasMoshServer: true, osID: "macos")
+        let plan = ServerUpgradePlanner.plan(for: probe, wantsMosh: false)
+
+        XCTAssertEqual(plan.missingPackages, ["tmux"])
+        XCTAssertEqual(plan.packageCommand, "brew install tmux")
+        XCTAssertNil(plan.firewallCommand, "pas de pare-feu à ouvrir pour une session locale")
+    }
+
+    func testTheTargetKnowsWhereItsCommandRuns() {
+        XCTAssertTrue(UpgradeTarget.localMac.isLocal)
+        XCTAssertNil(UpgradeTarget.localMac.alias)
+        XCTAssertFalse(UpgradeTarget.localMac.wantsMosh)
+        XCTAssertEqual(UpgradeTarget.localMac.commandLocation, "À exécuter sur ce Mac")
+
+        let server = Server(name: "billy", sshAlias: "billy")
+        XCTAssertEqual(UpgradeTarget.server(server).alias, "billy")
+        XCTAssertTrue(UpgradeTarget.server(server).wantsMosh)
+    }
+
+    /// La sonde du Mac est relevée à la demande : elle ne se périme jamais et
+    /// n'a rien à invalider.
+    func testTheLocalTargetProbesOnDemand() {
+        XCTAssertNotNil(UpgradeTarget.localMac.probe)
+        XCTAssertEqual(UpgradeTarget.localMac.probe?.osID, "macos")
     }
 }

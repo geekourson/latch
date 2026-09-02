@@ -61,14 +61,16 @@ enum ServerCapabilities {
 
     /// La dégradation applicable à un raccourci donné.
     ///
-    /// Elle ne modifie jamais le modèle persisté : c'est une décision d'exécution,
-    /// recalculée à chaque connexion. Une commande personnalisée n'est jamais
-    /// retouchée — l'utilisateur l'a écrite, on ne la corrige pas dans son dos —
-    /// et un raccourci local ne dépend d'aucune sonde.
+    /// Elle ne modifie jamais le modèle persisté : c'est une décision
+    /// d'exécution, recalculée à chaque connexion. Une commande personnalisée
+    /// n'est jamais retouchée — l'utilisateur l'a écrite, on ne la corrige pas
+    /// dans son dos.
+    ///
+    /// Un raccourci local est concerné comme les autres : sans tmux sur le Mac,
+    /// il échouait sur « /bin/sh: tmux: command not found », là où la cascade
+    /// sait ouvrir un shell et le dire.
     static func degradation(for shortcut: Shortcut, probe: ProbeResult?) -> Degradation {
-        guard shortcut.customCommand == nil, shortcut.connection.transport.isRemote else {
-            return .none
-        }
+        guard shortcut.customCommand == nil else { return .none }
         return degradation(for: probe)
     }
 }
@@ -192,6 +194,10 @@ enum ServerUpgradePlanner {
             return "sudo zypper install -y \(list)"
         case "freebsd":
             return "sudo pkg install -y \(list)"
+        case "macos":
+            // Homebrew n'a pas de « -y » : il n'attend rien, il installe.
+            // Et surtout pas de sudo — brew refuse de tourner en root.
+            return "brew install \(list)"
         default:
             // `opensuse-leap`, `opensuse-tumbleweed`… le §6 écrit `opensuse*`.
             if identifier.hasPrefix("opensuse") { return "sudo zypper install -y \(list)" }

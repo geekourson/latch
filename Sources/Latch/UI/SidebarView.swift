@@ -22,8 +22,8 @@ struct SidebarView: View {
 
                     let loose = app.store.unattachedShortcuts
                     if !loose.isEmpty {
-                        if !app.store.servers.isEmpty { Spacer().frame(height: 14) }
-                        SectionHeader(title: "local")
+                            if !app.store.servers.isEmpty { Spacer().frame(height: 14) }
+                        LocalSectionHeader()
                         ForEach(loose) { shortcut in
                             ShortcutRow(shortcut: shortcut)
                         }
@@ -83,7 +83,7 @@ private struct ServerSection: View {
                 Spacer(minLength: 0)
                 if needsUpgrade {
                     Button {
-                        app.upgradingServerID = server.id
+                        app.upgradingTarget = .server(server)
                     } label: {
                         Image(systemName: "exclamationmark.circle")
                             .font(.system(size: 10))
@@ -98,7 +98,7 @@ private struct ServerSection: View {
                 Button("Sonder à nouveau") {
                     Task { await app.store.probe(serverID: server.id, force: true) }
                 }
-                Button("Améliorer cet hôte…") { app.upgradingServerID = server.id }
+                Button("Améliorer cet hôte…") { app.upgradingTarget = .server(server) }
                 Divider()
                 Button("Nouvelle session ici") { app.newShortcut(host: server.sshAlias) }
             }
@@ -208,14 +208,40 @@ private struct WindowRow: View {
 
 // MARK: - Décor
 
-private struct SectionHeader: View {
-    let title: String
+/// Le Mac est un hôte comme un autre : même pastille, même accès au panneau
+/// d'amélioration quand il lui manque tmux (§6).
+private struct LocalSectionHeader: View {
+    @EnvironmentObject private var app: AppState
+
+    private var degradation: Degradation {
+        ServerCapabilities.degradation(for: LocalTools.probe())
+    }
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color.latchText)
-            .padding(.vertical, 4)
+        HStack(spacing: 7) {
+            Circle()
+                .fill(degradation.isDegraded ? Color.latchAccent : Color.latchTextFaint)
+                .frame(width: 6, height: 6)
+
+            Text("local")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.latchText)
+
+            Spacer(minLength: 0)
+
+            if degradation.isDegraded {
+                Button {
+                    app.upgradingTarget = .localMac
+                } label: {
+                    Image(systemName: "exclamationmark.circle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.latchAccent)
+                }
+                .buttonStyle(.plain)
+                .help(LocalTools.missingTmuxMessage)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

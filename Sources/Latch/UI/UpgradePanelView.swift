@@ -15,7 +15,8 @@ import SwiftUI
 
 struct UpgradePanelView: View {
     @EnvironmentObject private var app: AppState
-    let server: Server
+    /// Un serveur, ou le Mac : le §6 s'applique aux deux.
+    let target: UpgradeTarget
 
     @State private var freeformCommand = ""
     @State private var showsHookScript = false
@@ -25,7 +26,14 @@ struct UpgradePanelView: View {
     @State private var hooksInstalled: Bool?
 
     private var plan: UpgradePlan {
-        ServerUpgradePlanner.plan(for: server.probe)
+        ServerUpgradePlanner.plan(for: target.probe, wantsMosh: target.wantsMosh)
+    }
+
+    /// Le serveur, quand la cible en est un. Les hooks, le serveur MCP et la
+    /// case « ne plus proposer » n'ont de sens que là.
+    private var server: Server? {
+        if case .server(let server) = target { return server }
+        return nil
     }
 
     var body: some View {
@@ -48,19 +56,22 @@ struct UpgradePanelView: View {
                         claudeBlock(claude)
                     }
                     offPathBlock
-                    hooksBlock
-                    mcpBlock
-                    localMoshBlock
-                    pathHint
-                    skipToggle
+                    if server != nil {
+                        hooksBlock
+                        mcpBlock
+                        localMoshBlock
+                        pathHint
+                        skipToggle
+                    }
                 }
                 .padding(18)
             }
         }
         .frame(width: 340)
         .background(Color.latchSurface)
-        .task(id: server.sshAlias) {
-            hooksInstalled = await HookInstaller.isInstalled(on: server.sshAlias)
+        .task(id: target.id) {
+            guard let alias = target.alias else { return }
+            hooksInstalled = await HookInstaller.isInstalled(on: alias)
         }
     }
 
@@ -68,7 +79,7 @@ struct UpgradePanelView: View {
 
     private var header: some View {
         HStack {
-            Text(server.name)
+            Text(target.name)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color.latchText)
             Spacer()
@@ -132,12 +143,24 @@ struct UpgradePanelView: View {
 
     private var commandBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("À exécuter sur \(server.sshAlias)", systemImage: "terminal")
+            Label(target.commandLocation, systemImage: "terminal")
                 .labelStyle(SectionLabelStyle())
 
             if let command = plan.packageCommand {
                 CommandBox(command: command)
                 actions(for: command)
+            }
+
+            // Sur un Mac sans Homebrew, la commande proposée n'a rien pour
+            // s'exécuter : le dire vaut mieux que la laisser échouer.
+            if target.isLocal, LocalTools.homebrewPath == nil {
+                Text(LocalTools.missingHomebrewMessage)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchAccent)
+                    .fixedSize(horizontal: false, vertical: true)
+                Link("brew.sh", destination: LocalTools.homebrewURL)
+                    .font(.system(size: 11))
+                    .tint(Color.latchAccent)
             }
         }
     }
@@ -299,7 +322,7 @@ struct UpgradePanelView: View {
             }
             .font(.system(size: 11))
             .confirmationDialog(
-                "Installer les hooks sur \(server.sshAlias) ?",
+                "Installer les hooks sur \(target.alias ?? target.name) ?",
                 isPresented: $confirmsHookInstall,
                 titleVisibility: .visible
             ) {
@@ -334,7 +357,7 @@ struct UpgradePanelView: View {
         isInstallingHooks = true
         hookInstallResult = nil
         Task {
-            switch await app.installHooks(on: server.sshAlias) {
+            switch await app.installHooks(on: target.alias ?? "") {
             case .success(let output):
                 hookInstallResult = output.isEmpty ? "latch: hooks installés." : output
                 hooksInstalled = true
@@ -357,7 +380,7 @@ struct UpgradePanelView: View {
                 Label("Piloter Latch depuis Claude Code", systemImage: "point.3.connected.trianglepath.dotted")
                     .labelStyle(SectionLabelStyle())
 
-                Text("À lancer une fois sur \(server.sshAlias), pendant qu'une "
+                Text("À lancer une fois sur \(target.alias ?? target.name), pendant qu'une "
                     + "session Latch y est ouverte — c'est elle qui porte le "
                     + "tunnel. Claude Code pourra alors ouvrir un onglet, "
                     + "lancer une commande ou afficher un fichier.")
@@ -422,9 +445,9 @@ struct UpgradePanelView: View {
 
     private var skipBinding: Binding<Bool> {
         Binding(
-            get: { server.skipUpgradePrompt },
+            get: { server?.skipUpgradePrompt ?? false },
             set: { newValue in
-                var updated = server
+                guard var updated = server else { return }
                 updated.skipUpgradePrompt = newValue
                 app.store.update(updated)
             }
@@ -457,7 +480,9 @@ struct UpgradePanelView: View {
     /// le curseur reste en fin de ligne. L'utilisateur appuie lui-même sur
     /// Entrée et tape son mot de passe sudo dans un vrai TTY.
     private func runInPane(_ command: String) {
-        let session = app.openBareShell(on: server.sshAlias, named: "installer · \(server.name)")
+        let session = target.alias.map {
+            app.openBareShell(on: $0, named: "installer · \(target.name)")
+        } ?? app.openLocalShell(named: "installer · \(target.name)")
         Task {
             // On attend que le shell distant ait rendu la main. Il n'y a pas de
             // signal fiable pour ça sans analyser l'invite : une temporisation
@@ -471,11 +496,15 @@ struct UpgradePanelView: View {
     /// disparaît tout seul si l'installation a réussi, et reste sinon. Pas de
     /// confirmation de succès qu'on n'aurait pas vérifiée.
     private func close() {
-        let id = server.id
-        app.upgradingServerID = nil
+        let server = self.server
+        app.upgradingTarget = nil
+        // La sonde d'un serveur est en cache : on l'invalide pour que le
+        // bandeau disparaisse tout seul si l'installation a réussi, et reste
+        // sinon. Celle du Mac est relevée à la demande, rien à invalider.
+        guard let server else { return }
         Task {
-            app.store.invalidateProbe(serverID: id)
-            await app.store.probe(serverID: id, force: true)
+            app.store.invalidateProbe(serverID: server.id)
+            await app.store.probe(serverID: server.id, force: true)
         }
     }
 }
@@ -516,11 +545,11 @@ private struct CommandBox: View {
 struct DegradationBanner: View {
     @EnvironmentObject private var app: AppState
     let degradation: Degradation
-    let server: Server?
+    let target: UpgradeTarget?
 
     var body: some View {
         Button {
-            if let server { app.upgradingServerID = server.id }
+            app.upgradingTarget = target
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
@@ -532,7 +561,7 @@ struct DegradationBanner: View {
                     .foregroundStyle(Color.latchTextDim)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                if server != nil {
+                if target != nil {
                     Text("Améliorer…")
                         .font(.system(size: 11, weight: .medium))
                 }

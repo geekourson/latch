@@ -26,7 +26,7 @@ struct ContentView: View {
                 if app.currentDegradation.isDegraded {
                     DegradationBanner(
                         degradation: app.currentDegradation,
-                        server: app.currentServer
+                        target: app.currentTarget
                     )
                 }
 
@@ -36,14 +36,14 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity)
 
-            if let server = upgradingServer {
-                UpgradePanelView(server: server)
+            if let target = app.upgradingTarget {
+                UpgradePanelView(target: target)
                     .transition(.move(edge: .trailing))
             }
         }
         .background(Color.latchBackground)
         .ignoresSafeArea(.container, edges: .top)
-        .animation(.easeOut(duration: 0.16), value: app.upgradingServerID)
+        .animation(.easeOut(duration: 0.16), value: app.upgradingTarget)
         .sheet(item: $app.editedShortcut) { shortcut in
             BuilderView(shortcut: shortcut)
                 .environmentObject(app)
@@ -57,11 +57,6 @@ struct ContentView: View {
             actions: { Button("D'accord") { app.errorMessage = nil } },
             message: { Text(app.errorMessage ?? "") }
         )
-    }
-
-    private var upgradingServer: Server? {
-        guard let id = app.upgradingServerID else { return nil }
-        return app.store.servers.first { $0.id == id }
     }
 
     /// Tous les onglets restent montés : basculer d'onglet ne doit pas tuer un

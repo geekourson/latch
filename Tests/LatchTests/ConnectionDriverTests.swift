@@ -247,3 +247,74 @@ final class MoshDriverTests: XCTestCase {
         XCTAssertNil(MoshDriver.numericAddress(of: "cet-hote-n-existe-pas.invalid"))
     }
 }
+
+// MARK: - Le Mac comme hôte
+
+final class LocalToolsTests: XCTestCase {
+
+    /// Le `PATH` n'est jamais consulté : celui d'une app lancée depuis le
+    /// Finder ne contient ni /opt/homebrew/bin ni /usr/local/bin.
+    func testSearchesAbsolutePathsOnly() {
+        for path in LocalTools.searchPaths {
+            XCTAssertTrue(path.hasPrefix("/"), path)
+        }
+        XCTAssertTrue(LocalTools.searchPaths.contains("/opt/homebrew/bin"))
+        XCTAssertEqual(LocalTools.searchPaths.first, "/opt/homebrew/bin", "Homebrew d'abord")
+    }
+
+    /// Ce que launchd donne à une app sans réglage : c'est la référence pour
+    /// savoir si un outil sera trouvable ou non.
+    func testKnowsWhatLaunchdProvides() {
+        XCTAssertEqual(LocalTools.launchdPaths, ["/usr/bin", "/bin", "/usr/sbin", "/sbin"])
+        XCTAssertFalse(LocalTools.launchdPaths.contains("/opt/homebrew/bin"))
+    }
+
+    func testFindsAToolThatExists() {
+        XCTAssertEqual(LocalTools.path(of: "sh"), "/bin/sh")
+        XCTAssertNil(LocalTools.path(of: "un-outil-qui-n-existe-pas"))
+    }
+
+    /// `/bin/sh` est dans le PATH de launchd, donc pas « hors PATH ».
+    func testSystemToolsAreNotConsideredOffPath() {
+        XCTAssertFalse(LocalTools.isOffPath("sh"))
+        XCTAssertFalse(LocalTools.isOffPath("un-outil-qui-n-existe-pas"))
+    }
+
+    /// Une session locale n'ouvre aucune connexion : annoncer mosh manquant
+    /// afficherait un bandeau pour rien.
+    func testMoshIsIrrelevantLocally() {
+        XCTAssertTrue(LocalTools.probe().hasMoshServer)
+        XCTAssertEqual(LocalTools.probe().osID, "macos")
+    }
+
+    /// Et la sonde locale dit la vérité sur cette machine-ci, quelle qu'elle
+    /// soit : tmux présent ou non, le résultat doit être cohérent.
+    func testTheLocalProbeAgreesWithTheFilesystem() {
+        let probe = LocalTools.probe()
+        XCTAssertEqual(probe.hasTmux, LocalTools.path(of: "tmux") != nil)
+        if let tmux = LocalTools.path(of: "tmux"), LocalTools.isOffPath("tmux") {
+            XCTAssertEqual(probe.offPathTools["tmux"], tmux)
+        }
+    }
+
+    /// Sans tmux, la session locale devient un shell et le dit — au lieu
+    /// d'échouer sur « command not found ».
+    func testDegradedLocalPlanCarriesAnExplanation() async throws {
+        var local = shortcut(transport: .local, host: "", session: "notes")
+        local.connection.workingDirectory = "~/Documents"
+
+        let plan = try await LocalDriver().plan(for: local, degradation: .tmuxMissing)
+        XCTAssertEqual(plan.command, "exec $SHELL")
+        XCTAssertEqual(plan.notice?.contains("brew install tmux"), true)
+    }
+
+    /// Et avec tmux ailleurs que dans le PATH de launchd, il est appelé par son
+    /// chemin absolu.
+    func testTmuxOffPathIsCalledAbsolutely() async throws {
+        let local = shortcut(transport: .local, host: "", session: "notes")
+        let plan = try await LocalDriver().plan(
+            for: local, degradation: .none, toolPaths: ["tmux": "/opt/homebrew/bin/tmux"]
+        )
+        XCTAssertEqual(plan.command, "/opt/homebrew/bin/tmux new -A -s notes")
+    }
+}
