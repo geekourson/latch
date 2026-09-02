@@ -6,7 +6,7 @@ session ouvre un terminal attaché à une session `tmux` sur un serveur, quel qu
 soit l'état de la connexion précédente. Vous fermez le Mac, vous le rouvrez le
 lendemain, la session est là où vous l'aviez laissée.
 
-![Latch attaché à une session tmux distante, htop en cours](docs/screenshot.png)
+![Latch attaché à une session tmux distante](docs/screenshot.png)
 
 ## État
 
@@ -31,6 +31,31 @@ tout passe par le tunnel, rien n'est exposé au réseau.
 Le serveur n'écoute que sur `127.0.0.1` et exige un jeton tiré à chaque
 lancement de Latch. La commande `claude mcp add` à jouer sur le serveur est
 affichée dans le panneau d'amélioration.
+
+### La clé d'abord, le mot de passe en dernier
+
+L'authentification se fait par clé. Quand un hôte n'en a pas encore, le panneau
+propose de la mettre en place : `ssh-keygen` puis `ssh-copy-id` s'exécutent
+dans un panneau **visible**, parce que `ssh-copy-id` demande le mot de passe du
+compte distant et qu'il doit le demander dans un vrai TTY. Latch ne le voit
+pas. Une clé existante n'est jamais écrasée, et la phrase de passe reste à
+votre main.
+
+Si un serveur n'accepte décidément que les mots de passe, Latch peut en garder
+un — dans le **trousseau du système**, jamais dans son fichier de
+configuration — et l'écrit sur le pseudo-terminal après avoir vu l'invite. Avec
+trois garde-fous, parce qu'un automate qui tape un mot de passe tout seul est
+une mauvaise idée dès qu'il se trompe de moment : une fenêtre de temps après la
+connexion, trois tentatives au maximum, et pas deux réponses à la même invite
+redessinée.
+
+### La barre d'état dit où on en est
+
+Discrète, en bas : l'état de la connexion, l'activité de Claude Code et le
+fichier qu'il touche, la **branche git et le diff** du panneau actif de la
+session distante, et la **latence** — le temps d'ouverture d'une connexion TCP
+vers le port ssh de l'hôte. Ce qu'on ne sait pas ne s'affiche pas : un vide
+vaut mieux qu'un chiffre inventé.
 
 ### La session se rattrape toute seule
 
@@ -233,10 +258,16 @@ sommes de contrôle. C'est ce que la GPLv3 exige, et c'est aussi ce qui ferme
 définitivement la porte du Mac App Store — le `.dmg` notarisé reste le seul
 canal de distribution.
 
-Une compilation locale n'embarque rien : Latch retombe alors sur le `mosh` du
-système s'il est installé, et le dit dans la barre d'état. Sans mosh nulle
-part, le panneau d'amélioration propose `brew install mosh` et le transport ssh
-reste disponible.
+Pour une compilation locale, produisez-le une fois et posez-le dans `Vendor/` :
+
+```bash
+Scripts/build-mosh-client.sh Vendor arm64 x86_64
+```
+
+La compilation suivante l'embarquera et le signera toute seule. Sans lui, Latch
+retombe sur le `mosh` du système s'il est installé, et le dit dans la barre
+d'état ; sans mosh nulle part, le panneau d'amélioration propose
+`brew install mosh` et le transport ssh reste disponible.
 
 ## Distribution
 

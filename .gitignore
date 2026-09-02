@@ -18,3 +18,8 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# Le mosh-client embarqué : compilé par Scripts/build-mosh-client.sh, jamais
+# versionné. C'est un binaire GPLv3 ; le distribuer impose d'accompagner ses
+# sources, ce que fait le workflow de release, pas le dépôt.
+/Vendor/

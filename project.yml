@@ -51,6 +51,26 @@ targets:
         NSHumanReadableCopyright: "MIT — Billy Girboux"
         # Pas d'agent : Latch a une fenêtre principale.
         LSUIElement: false
+    postBuildScripts:
+      # SPEC §7 : les binaires publiés embarquent mosh-client. La CI le compile
+      # et le pose dans build/mosh ; en local, on le prend dans Vendor/ s'il y
+      # est. Sans lui, Latch retombe sur le mosh du système et le dit.
+      - name: Embarquer mosh-client
+        basedOnDependencyAnalysis: false
+        script: |
+          DESTINATION="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/MacOS/mosh-client"
+          for candidate in "$SRCROOT/Vendor/mosh-client" "$SRCROOT/build/mosh/mosh-client"; do
+            if [ -x "$candidate" ]; then
+              install -m 755 "$candidate" "$DESTINATION"
+              # Un bundle se signe de l'intérieur vers l'extérieur : sans cette
+              # signature, la signature de Latch échoue sur « code object is
+              # not signed at all ».
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$DESTINATION"
+              echo "note: mosh-client embarqué depuis $candidate"
+              exit 0
+            fi
+          done
+          echo "note: pas de mosh-client à embarquer — Scripts/build-mosh-client.sh en produit un"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.latch.Latch
@@ -71,6 +91,26 @@ targets:
       - path: Tests/LatchTests
     dependencies:
       - target: Latch
+    postBuildScripts:
+      # SPEC §7 : les binaires publiés embarquent mosh-client. La CI le compile
+      # et le pose dans build/mosh ; en local, on le prend dans Vendor/ s'il y
+      # est. Sans lui, Latch retombe sur le mosh du système et le dit.
+      - name: Embarquer mosh-client
+        basedOnDependencyAnalysis: false
+        script: |
+          DESTINATION="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/MacOS/mosh-client"
+          for candidate in "$SRCROOT/Vendor/mosh-client" "$SRCROOT/build/mosh/mosh-client"; do
+            if [ -x "$candidate" ]; then
+              install -m 755 "$candidate" "$DESTINATION"
+              # Un bundle se signe de l'intérieur vers l'extérieur : sans cette
+              # signature, la signature de Latch échoue sur « code object is
+              # not signed at all ».
+              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" "$DESTINATION"
+              echo "note: mosh-client embarqué depuis $candidate"
+              exit 0
+            fi
+          done
+          echo "note: pas de mosh-client à embarquer — Scripts/build-mosh-client.sh en produit un"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.latch.LatchTests
