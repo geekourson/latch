@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sélectionner Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
+
+      - name: Installer XcodeGen
+        run: brew install xcodegen
+
+      - name: Générer le projet
+        run: xcodegen generate
+
+      # SwiftTerm embarque un shader Metal ; depuis Xcode 26 la chaîne d'outils
+      # Metal est un composant à télécharger séparément.
+      - name: Chaîne d'outils Metal
+        run: xcodebuild -downloadComponent MetalToolchain || true
+
+      - name: Compiler
+        run: |
+          xcodebuild build \
+            -project Latch.xcodeproj \
+            -scheme Latch \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Tester
+        run: |
+          xcodebuild test \
+            -project Latch.xcodeproj \
+            -scheme Latch \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -skipPackagePluginValidation
