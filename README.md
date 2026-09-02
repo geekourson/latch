@@ -10,10 +10,68 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.1** — une fenêtre, un terminal, une commande codée en dur. C'est la
-première marche de la [feuille de route](SPEC.md#12-feuille-de-route) : le
-pseudo-terminal, le rendu et le redimensionnement fonctionnent, le reste
-(raccourcis, barre latérale, onglets, `CommandBuilder`) arrive en v0.2.
+**v0.2** — c'est une app. Raccourcis persistés en JSON, barre latérale, onglets,
+écran du builder, et la sonde serveur du §6 avec sa cascade de dégradation.
+Reste pour la v0.3 : le binaire mosh embarqué, la reconnexion au réveil et les
+hooks Claude Code. Voir la [feuille de route](SPEC.md#12-feuille-de-route).
+
+## Ce que fait Latch
+
+Un clic sur une session dans la barre latérale ouvre un onglet attaché à
+`tmux new -A -s <session>` sur le serveur. `-A` attache si la session existe et
+la crée sinon : il n'y a nulle part de logique « la session existe-t-elle ? »,
+et c'est ce qui rend la reconnexion triviale.
+
+### La commande est construite, pas devinée
+
+L'écran du builder empile des étapes — pré-vol local, connexion, fenêtres tmux —
+et affiche en bas la commande générée, **éditable**. La modifier bascule le
+raccourci en mode personnalisé, avec un bouton pour revenir au mode assisté.
+
+```bash
+ssh -t billy "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
+mosh billy -- tmux new -A -s dev
+tmux new -A -s notes -c ~/notes
+```
+
+L'échappement est la partie fragile, et elle est testée en faisant réellement
+traverser un `/bin/sh` aux commandes produites, avec de faux `tmux`, `ssh` et
+`mosh` qui impriment les arguments reçus.
+
+### Le serveur est sondé, jamais modifié
+
+À la première connexion à un hôte, un aller-retour unique relève `tmux`,
+`mosh-server`, `claude` et l'identifiant de la distribution. Le résultat est mis
+en cache sept jours.
+
+| État du serveur | Ce que fait Latch |
+|---|---|
+| tmux + mosh | commande nominale |
+| tmux seul | bascule sur `ssh -t`, bandeau non bloquant proposant mosh |
+| aucun des deux | `ssh -t` sur un shell nu, bandeau signalant que la session ne survivra pas |
+
+**La connexion réussit toujours, même dégradée.** Le bandeau est cliquable et
+ouvre un panneau qui affiche le diagnostic, la conséquence en une phrase, et la
+commande d'installation exacte construite depuis `/etc/os-release` :
+
+| `ID` détecté | Commande proposée |
+|---|---|
+| `debian` `ubuntu` `raspbian` `linuxmint` `pop` | `sudo apt install -y …` |
+| `fedora` `rhel` `centos` `rocky` `almalinux` | `sudo dnf install -y …` |
+| `arch` `manjaro` `endeavouros` | `sudo pacman -S --noconfirm …` |
+| `alpine` | `sudo apk add …` |
+| `opensuse*` `sles` | `sudo zypper install -y …` |
+| `freebsd` | `sudo pkg install -y …` |
+| inconnu | aucune commande — les paquets requis, un lien, et un champ libre |
+
+Seuls les paquets réellement manquants y figurent. Claude Code a sa propre
+ligne, **sans `sudo`** : son installeur officiel refuse de tourner sous sudo et
+installe dans `$HOME/.local/bin`.
+
+Latch n'exécute rien de tout ça. Le bouton par défaut est `Copier` ; l'autre
+ouvre un onglet sur l'hôte et y **écrit** la commande sans appuyer sur Entrée,
+pour que le mot de passe `sudo` soit tapé dans un vrai TTY. Aucun `sudo -S`,
+aucun `sshpass`, aucune installation silencieuse.
 
 ## Prérequis
 
@@ -61,17 +119,15 @@ du terminal :
   téléchargé et non notarisé demande un clic droit → **Ouvrir** au premier
   lancement.
 
-## Configuration de la v0.1
+## Configuration
 
-La commande lancée au démarrage est codée en dur dans
-`Sources/Latch/UI/ContentView.swift` :
+Les raccourcis vivent dans
+`~/Library/Application Support/app.latch.Latch/shortcuts.json`.
+**Ce fichier ne contient jamais de secret** : l'authentification se fait par
+clé, et Latch ne stocke aucun mot de passe.
 
-```swift
-ssh -t billy "tmux new -A -s api"
-```
-
-`billy` est un alias de `~/.ssh/config`. Adaptez-le, ou ajoutez l'entrée
-correspondante :
+Au premier lancement, la barre latérale se remplit avec les alias `Host` de
+`~/.ssh/config`. Ajoutez-y l'entrée correspondant à votre serveur :
 
 ```
 Host billy
@@ -107,8 +163,8 @@ Quatre couches, strictement séparées — aucune ne connaît celle du dessus :
 
 | Couche | Rôle | État |
 |---|---|---|
-| `SessionStore` | état, persistance JSON, trousseau | v0.2 |
-| `CommandBuilder` | modèle → chaîne de commande | v0.2 |
+| `SessionStore` | état, persistance JSON, trousseau | ✅ |
+| `CommandBuilder` | modèle → chaîne de commande | ✅ |
 | `ConnectionDriver` | lance un binaire dans un PTY | v0.3 |
 | `PTYProcess` | `forkpty(3)`, octets, `SIGWINCH`, fin de vie | ✅ |
 | `TerminalPane` | SwiftTerm branché sur le flux | ✅ |
