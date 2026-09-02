@@ -20,7 +20,10 @@ struct BuilderView: View {
 
     @State private var shortcut: Shortcut
     @State private var previewText: String = ""
-    @State private var isEditingPreview = false
+    /// Le dernier texte que l'app a écrit dans l'aperçu. C'est lui qui permet
+    /// de reconnaître une frappe de l'utilisateur ; un drapeau ne le pourrait
+    /// pas, `onChange` arrivant au tour de boucle suivant.
+    @State private var lastGeneratedPreview = ""
     @State private var isConnectionExpanded = true
 
     init(shortcut: Shortcut) {
@@ -222,25 +225,28 @@ struct BuilderView: View {
         .background(Color.latchBackground)
     }
 
+    /// L'aperçu ne contient **jamais** autre chose qu'une commande. Y écrire
+    /// les erreurs de validation les faisait adopter comme commande
+    /// personnalisée à la frappe suivante — et « Il manque l'hôte de rebond. »
+    /// donne un shell qui refuse de démarrer sur une apostrophe non fermée.
+    /// Les erreurs s'affichent en dessous.
     private func refreshPreview() {
-        isEditingPreview = true
-        defer { isEditingPreview = false }
-        previewText = (try? CommandBuilder.build(shortcut))
-            ?? CommandBuilder.validate(shortcut).map(\.message).joined(separator: "\n")
+        let generated = (try? CommandBuilder.build(shortcut)) ?? ""
+        lastGeneratedPreview = generated
+        previewText = generated
     }
 
     /// Si l'utilisateur modifie l'aperçu, le raccourci bascule en mode
     /// personnalisé — mais retaper exactement la commande générée ne doit pas
     /// le faire basculer pour rien.
     private func adoptEditedPreview(_ text: String) {
-        guard !isEditingPreview else { return }
-        let generated = (try? CommandBuilder.build(shortcut, degradation: .none)) ?? ""
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if shortcut.isCustom {
-            shortcut.customCommand = trimmed.isEmpty ? nil : trimmed
-        } else if trimmed != generated.trimmingCharacters(in: .whitespacesAndNewlines) {
-            shortcut.customCommand = trimmed
+        switch PreviewEdit.decide(edited: text, lastGenerated: lastGeneratedPreview) {
+        case .ignore:
+            break
+        case .revert:
+            shortcut.customCommand = nil
+        case .adopt(let command):
+            shortcut.customCommand = command
         }
     }
 }

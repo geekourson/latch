@@ -397,3 +397,61 @@ final class CommandBuilderTests: XCTestCase {
         XCTAssertEqual(command, #"ssh -t billy@192.168.1.37 "tmux new -A -s api""#)
     }
 }
+
+// MARK: - L'aperçu éditable du §9.2
+
+final class PreviewEditTests: XCTestCase {
+
+    /// Le cas qui a mordu : l'app écrit l'aperçu, `onChange` se déclenche au
+    /// tour suivant, et sans cette comparaison le texte est adopté comme
+    /// commande personnalisée alors que personne n'a rien tapé.
+    func testTextWrittenByTheAppIsIgnored() {
+        XCTAssertEqual(
+            PreviewEdit.decide(edited: "tmux new -A -s api", lastGenerated: "tmux new -A -s api"),
+            .ignore
+        )
+    }
+
+    func testAnEditBecomesTheCustomCommand() {
+        XCTAssertEqual(
+            PreviewEdit.decide(edited: "ssh ailleurs", lastGenerated: "tmux new -A -s api"),
+            .adopt("ssh ailleurs")
+        )
+    }
+
+    /// Vider le champ ramène au mode assisté.
+    func testClearingTheFieldReverts() {
+        XCTAssertEqual(PreviewEdit.decide(edited: "", lastGenerated: "tmux new -A -s api"), .revert)
+        XCTAssertEqual(PreviewEdit.decide(edited: "   \n ", lastGenerated: "tmux"), .revert)
+    }
+
+    func testWhitespaceAroundACommandIsTrimmed() {
+        XCTAssertEqual(
+            PreviewEdit.decide(edited: "  ssh ailleurs \n", lastGenerated: ""),
+            .adopt("ssh ailleurs")
+        )
+    }
+
+    /// Un raccourci invalide ne produit aucune commande : le champ reste vide,
+    /// et rester vide ne doit rien déclencher.
+    func testAnEmptyGeneratedPreviewIsStillIgnoredWhenUntouched() {
+        XCTAssertEqual(PreviewEdit.decide(edited: "", lastGenerated: ""), .ignore)
+    }
+
+    /// Et la garantie de fond : un message de validation n'est jamais une
+    /// commande, parce qu'il n'entre plus dans le champ.
+    func testValidationMessagesNeverReachTheField() throws {
+        let invalid = Shortcut(
+            name: "cassé",
+            connection: Connection(transport: .sshJump, host: "billy", tmuxSession: "api")
+        )
+        let issues = CommandBuilder.validate(invalid)
+        XCTAssertFalse(issues.isEmpty)
+        XCTAssertThrowsError(try CommandBuilder.build(invalid))
+
+        // Ce que le builder met dans l'aperçu quand la construction échoue.
+        let preview = (try? CommandBuilder.build(invalid)) ?? ""
+        XCTAssertEqual(preview, "")
+        XCTAssertEqual(PreviewEdit.decide(edited: preview, lastGenerated: preview), .ignore)
+    }
+}
