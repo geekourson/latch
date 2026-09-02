@@ -22,6 +22,7 @@ struct UpgradePanelView: View {
     @State private var confirmsHookInstall = false
     @State private var isInstallingHooks = false
     @State private var hookInstallResult: String?
+    @State private var hooksInstalled: Bool?
 
     private var plan: UpgradePlan {
         ServerUpgradePlanner.plan(for: server.probe)
@@ -58,6 +59,9 @@ struct UpgradePanelView: View {
         }
         .frame(width: 340)
         .background(Color.latchSurface)
+        .task(id: server.sshAlias) {
+            hooksInstalled = await HookInstaller.isInstalled(on: server.sshAlias)
+        }
     }
 
     // MARK: En-tête
@@ -239,8 +243,17 @@ struct UpgradePanelView: View {
     /// clair avant de l'être — le script complet est dépliable.
     private var hooksBlock: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Hooks Latch", systemImage: "bolt.horizontal")
-                .labelStyle(SectionLabelStyle())
+            HStack(spacing: 6) {
+                Label("Hooks Latch", systemImage: "bolt.horizontal")
+                    .labelStyle(SectionLabelStyle())
+                // Savoir avant d'appuyer : un bouton « Installer » qui répond
+                // « rien à changer » donne l'impression de n'avoir rien fait.
+                if hooksInstalled == true {
+                    Text("en place")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.latchSuccess)
+                }
+            }
 
             Text("Ils font remonter l'activité de Claude Code : l'indicateur, "
                 + "le fichier en cours, et une notification quand une "
@@ -268,7 +281,7 @@ struct UpgradePanelView: View {
                 // Contrairement aux paquets du §6, ça n'écrit que dans le
                 // dossier personnel : pas de sudo, donc l'app peut le faire
                 // elle-même — après confirmation explicite, comme le veut le §10.
-                Button(isInstallingHooks ? "Installation…" : "Installer") {
+                Button(hookButtonTitle) {
                     confirmsHookInstall = true
                 }
                 .buttonStyle(.borderedProminent)
@@ -312,6 +325,11 @@ struct UpgradePanelView: View {
         }
     }
 
+    private var hookButtonTitle: String {
+        if isInstallingHooks { return "Installation…" }
+        return hooksInstalled == true ? "Réinstaller" : "Installer"
+    }
+
     private func installHooks() {
         isInstallingHooks = true
         hookInstallResult = nil
@@ -319,6 +337,7 @@ struct UpgradePanelView: View {
             switch await app.installHooks(on: server.sshAlias) {
             case .success(let output):
                 hookInstallResult = output.isEmpty ? "latch: hooks installés." : output
+                hooksInstalled = true
             case .failure(let error):
                 hookInstallResult = error.localizedDescription
             }

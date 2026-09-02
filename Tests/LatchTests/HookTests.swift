@@ -266,3 +266,122 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(event.filePath, "/srv/a.py")
     }
 }
+
+// MARK: - Le script de fusion, exécuté pour de vrai
+
+final class HookMergeScriptTests: XCTestCase {
+
+    private var home: URL!
+
+    override func setUpWithError() throws {
+        home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latch-merge-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: home)
+    }
+
+    /// Exécute le script de fusion avec un `HOME` de test.
+    @discardableResult
+    private func runMerge() throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        process.arguments = ["-"]
+        process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin"]
+
+        let input = Pipe()
+        let output = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = output
+
+        try process.run()
+        input.fileHandleForWriting.write(Data(HookInstaller.settingsMergeScript.utf8))
+        try input.fileHandleForWriting.close()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func settings() throws -> [String: Any] {
+        let data = try Data(contentsOf: home.appendingPathComponent(".claude/settings.json"))
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    func testFirstRunInstallsEveryEvent() throws {
+        let message = try runMerge()
+        XCTAssertTrue(message.contains("6 hooks installes"), message)
+
+        let hooks = try XCTUnwrap(settings()["hooks"] as? [String: Any])
+        XCTAssertEqual(Set(hooks.keys), Set(HookInstaller.events))
+    }
+
+    /// Le cas qui a induit en erreur : rejouer l'installation annonçait
+    /// « 0 hook(s) ajouté(s) », ce qui se lit comme « ça n'a rien fait ».
+    func testSecondRunSaysEverythingIsAlreadyThere() throws {
+        try runMerge()
+        let message = try runMerge()
+        XCTAssertTrue(message.contains("deja en place"), message)
+        XCTAssertFalse(message.contains("0 hook"), message)
+
+        // Et rien n'a été dupliqué au passage.
+        let hooks = try XCTUnwrap(settings()["hooks"] as? [String: Any])
+        for event in HookInstaller.events {
+            let matchers = try XCTUnwrap(hooks[event] as? [[String: Any]])
+            XCTAssertEqual(matchers.count, 1, "événement \(event) dupliqué")
+        }
+    }
+
+    /// Une installation partielle se raconte telle qu'elle est.
+    func testPartialInstallationReportsBothNumbers() throws {
+        let claude = home.appendingPathComponent(".claude")
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        try #"{"hooks": {"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": "PLACEHOLDER"}]}]}}"#
+            .replacingOccurrences(
+                of: "PLACEHOLDER", with: home.appendingPathComponent(".latch/hook.sh").path
+            )
+            .write(to: claude.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+
+        let message = try runMerge()
+        XCTAssertTrue(message.contains("5 ajoutes"), message)
+        XCTAssertTrue(message.contains("1 deja"), message)
+    }
+
+    /// Les réglages qui n'appartiennent pas à Latch survivent, et une copie est
+    /// mise de côté avant toute écriture.
+    func testExistingSettingsAreKeptAndBackedUp() throws {
+        let claude = home.appendingPathComponent(".claude")
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        try #"{"theme": "dark", "hooks": {"PreCompact": [{"hooks": [{"command": "autre"}]}]}}"#
+            .write(to: claude.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
+
+        try runMerge()
+        let merged = try settings()
+        XCTAssertEqual(merged["theme"] as? String, "dark")
+
+        let hooks = try XCTUnwrap(merged["hooks"] as? [String: Any])
+        XCTAssertNotNil(hooks["PreCompact"], "un hook étranger a été perdu")
+        XCTAssertNotNil(hooks["SessionStart"])
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: claude.appendingPathComponent("settings.json.latch-backup").path
+            )
+        )
+    }
+
+    /// Un fichier illisible n'est pas écrasé : on sort en le disant.
+    func testAnUnreadableSettingsFileIsLeftAlone() throws {
+        let claude = home.appendingPathComponent(".claude")
+        try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
+        let path = claude.appendingPathComponent("settings.json")
+        try "pas du JSON".write(to: path, atomically: true, encoding: .utf8)
+
+        let message = try runMerge()
+        XCTAssertTrue(message.contains("illisible"), message)
+        XCTAssertEqual(try String(contentsOf: path, encoding: .utf8), "pas du JSON")
+    }
+}

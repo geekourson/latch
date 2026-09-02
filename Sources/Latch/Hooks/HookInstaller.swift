@@ -78,13 +78,14 @@ enum HookInstaller {
             entry = {"type": "command", "command": os.path.expanduser("~/.latch/hook.sh"),
                      "timeout": 5}
             hooks = settings.setdefault("hooks", {})
-            added = 0
+            added, present = 0, 0
 
             for event in [\(eventList)]:
                 matchers = hooks.setdefault(event, [])
                 # Deja installe ? On ne duplique pas.
                 if any(entry["command"] == h.get("command")
                        for m in matchers for h in m.get("hooks", [])):
+                    present += 1
                     continue
                 matchers.append({"matcher": "", "hooks": [dict(entry)]})
                 added += 1
@@ -98,7 +99,16 @@ enum HookInstaller {
                     json.dump(settings, handle, indent=2)
                     handle.write("\\n")
 
-            print("latch: %d hook(s) ajoute(s)" % added)
+            # « 0 ajoute » se lit comme « ca n'a rien fait ». Ce qui compte est
+            # le total en place, pas le nombre de lignes ecrites cette fois-ci.
+            total = added + present
+            if added == 0:
+                print("latch: les %d hooks etaient deja en place, rien a changer." % total)
+            elif present == 0:
+                print("latch: %d hooks installes." % added)
+            else:
+                print("latch: %d hooks en place (%d ajoutes, %d deja presents)."
+                      % (total, added, present))
             """
     }
 
