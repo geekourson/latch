@@ -95,10 +95,10 @@ struct BuilderView: View {
                     shortcut.preflight.removeAll { $0.id == step.id }
                 } content: {
                     VStack(alignment: .leading, spacing: 7) {
-                        TextField("Libellé", text: $step.label)
+                        TextField("VPN", text: $step.label)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium))
-                        TextField("Commande locale", text: $step.command)
+                        TextField("scutil --nc status Maison", text: $step.command)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11.5, design: .monospaced))
                             .foregroundStyle(Color.latchTextDim)
@@ -121,7 +121,14 @@ struct BuilderView: View {
                 shortcut.preflight.append(Preflight(label: "Étape", command: ""))
             }
         } header: {
-            SectionTitle("Pré-vol")
+            OptionalSectionHeader(
+                title: "Pré-vol",
+                isUsed: !shortcut.preflight.isEmpty,
+                explanation: "Des commandes lancées **sur le Mac**, avant de se "
+                    + "connecter : monter un VPN, démarrer un tunnel, réveiller une "
+                    + "machine. Une étape fatale qui échoue annule la connexion ; "
+                    + "les autres avertissent et laissent passer."
+            )
         }
     }
 
@@ -152,13 +159,16 @@ struct BuilderView: View {
                     shortcut.windows.removeAll { $0.id == window.id }
                 } content: {
                     VStack(alignment: .leading, spacing: 7) {
-                        TextField("Nom de la fenêtre", text: $window.name)
+                        TextField("logs", text: $window.name)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium))
-                        TextField("Commande distante", text: $window.command)
+                        TextField("journalctl -fu api", text: $window.command)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11.5, design: .monospaced))
                             .foregroundStyle(Color.latchTextDim)
+                        Text("Un nom que tu reconnaîtras, et ce qui tourne dedans.")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.latchTextFaint)
                     }
                 }
             }
@@ -170,13 +180,18 @@ struct BuilderView: View {
                 shortcut.windows.append(TmuxWindow(name: "fenêtre", command: ""))
             }
         } header: {
-            SectionTitle("Fenêtres")
-            Text("Les fenêtres tmux que cette session doit avoir. À chaque "
-                + "connexion, celles qui manquent sont créées ; les autres sont "
-                + "laissées telles quelles, et rien n'est jamais fermé.")
-                .font(.system(size: 10))
-                .foregroundStyle(Color.latchTextFaint)
-                .textCase(nil)
+            OptionalSectionHeader(
+                title: "Fenêtres",
+                isUsed: !shortcut.windows.isEmpty,
+                explanation: "Des onglets **à l'intérieur** de la session "
+                    + "distante : ton éditeur dans l'une, les journaux qui défilent "
+                    + "dans une autre. Elles vivent sur le serveur, survivent à la "
+                    + "déconnexion, et se choisissent depuis la barre latérale.\n\n"
+                    + "À chaque connexion, celles qui manquent sont créées ; les "
+                    + "autres sont laissées telles quelles, et aucune n'est jamais "
+                    + "fermée. La plupart des sessions n'en ont pas besoin — tmux "
+                    + "sait très bien en ouvrir à la main."
+            )
         }
     }
 
@@ -481,6 +496,46 @@ private enum InitialCommandKind: String, CaseIterable, Identifiable {
 }
 
 // MARK: - Éléments partagés
+
+/// L'en-tête d'une section facultative.
+///
+/// Tant qu'elle ne sert pas, elle se réduit à son titre : une explication qu'on
+/// traverse à chaque fois pour n'en avoir jamais besoin est un coût payé par
+/// tout le monde au profit de quelques-uns. Elle apparaît dès qu'on s'en sert,
+/// et se déplie à la demande.
+private struct OptionalSectionHeader: View {
+    let title: String
+    let isUsed: Bool
+    let explanation: String
+
+    @State private var isExplaining = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                SectionTitle(title)
+                Button {
+                    isExplaining.toggle()
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Color.latchTextFaint)
+                }
+                .buttonStyle(.plain)
+                .help("À quoi ça sert ?")
+                Spacer(minLength: 0)
+            }
+
+            if isExplaining || isUsed {
+                Text(.init(explanation))
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.latchTextFaint)
+                    .textCase(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
 
 private struct SectionTitle: View {
     let title: String
