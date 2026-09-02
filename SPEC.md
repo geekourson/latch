@@ -379,7 +379,8 @@ NSWorkspace.shared.notificationCenter.addObserver(
   par serveur : vert (connecté), ambre (veille / dégradé), gris (hors ligne).
 - Onglets : fond légèrement plus clair pour l'actif, aucun séparateur entre les
   inactifs.
-- Zone terminal : padding 18–22 px, interligne 1,8.
+- Zone terminal : padding 18–22 px, interligne 1,25 (multiplicateur de la
+  hauteur de ligne de la police).
 - Barre d'état basse, très discrète : état Claude Code, branche git, diff,
   latence.
 

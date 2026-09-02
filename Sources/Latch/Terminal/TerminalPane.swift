@@ -13,9 +13,10 @@ import SwiftUI
 
 /// Marges autour du terminal (SPEC §9.1).
 private let terminalPadding: CGFloat = 20
-/// Interligne demandé par la SPEC §9.1. C'est un multiplicateur de la hauteur
-/// de ligne de la police : 1.0 = compact, 1.8 = très aéré.
-private let terminalLineSpacing: CGFloat = 1.8
+/// Interligne (SPEC §9.1) : un multiplicateur de la hauteur de ligne de la
+/// police. 1.0 est compact, au-delà de 1.5 on perd un tiers des lignes utiles
+/// sans gagner en lisibilité.
+private let terminalLineSpacing: CGFloat = 1.25
 
 struct TerminalPane: NSViewRepresentable {
     @ObservedObject var session: TerminalSession
