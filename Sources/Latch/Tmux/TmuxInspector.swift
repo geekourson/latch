@@ -30,6 +30,41 @@ struct LiveWindow: Identifiable, Equatable {
     var target: String { "\(session):\(index)" }
 }
 
+/// Ce que la barre latérale peut décider elle-même, sans attendre le serveur.
+///
+/// La boucle d'inspection ne repasse que toutes les trois secondes : cliquer
+/// une fenêtre et voir la sélection bouger trois secondes plus tard donne une
+/// app en carton, alors que l'action, elle, est partie tout de suite. On
+/// applique donc le résultat attendu sur-le-champ, et le tour suivant confirme
+/// — ou corrige, si tmux n'était pas d'accord.
+enum TmuxOptimism {
+
+    /// Une seule fenêtre est active à la fois, dans une session donnée.
+    static func selecting(index: Int, in windows: [LiveWindow]) -> [LiveWindow] {
+        guard windows.contains(where: { $0.index == index }) else { return windows }
+        return windows.map { window in
+            var copy = window
+            copy.isActive = window.index == index
+            return copy
+        }
+    }
+
+    static func renaming(id: String, to name: String, in windows: [LiveWindow]) -> [LiveWindow] {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return windows }
+        return windows.map { window in
+            guard window.id == id else { return window }
+            var copy = window
+            copy.name = trimmed
+            return copy
+        }
+    }
+
+    static func removing(id: String, from windows: [LiveWindow]) -> [LiveWindow] {
+        windows.filter { $0.id != id }
+    }
+}
+
 /// Une session telle que tmux la connaît, avec de quoi juger si on l'a oubliée.
 struct LiveSession: Identifiable, Equatable {
     var name: String
@@ -100,6 +135,16 @@ final class TmuxInspector: ObservableObject {
     /// désigne : sans ça, elles s'accumulent sans que personne les voie.
     @Published private(set) var sessions: [LiveSession] = []
 
+    /// Les sélections décidées ici et pas encore confirmées par le serveur,
+    /// avec l'instant du clic. Une réponse déjà en vol quand on a cliqué
+    /// porte l'ancienne fenêtre active : sans ça, la sélection reviendrait en
+    /// arrière une fraction de seconde avant de repartir.
+    private var optimisticSelections: [String: (index: Int, since: Date)] = [:]
+
+    /// Au-delà, on considère que le clic s'est perdu et on refait confiance au
+    /// serveur : un tour de boucle, plus un aller-retour ssh.
+    private static let optimismGrace: TimeInterval = 5
+
     /// Le séparateur doit être improbable dans un nom de fenêtre — une
     /// tabulation l'est, un espace ne l'est pas.
     nonisolated static let separator = "\u{1F}"
@@ -165,6 +210,31 @@ final class TmuxInspector: ObservableObject {
     /// le Finder ne mène nulle part (§6, appliqué localement).
     private var localTmux: String? { LocalTools.path(of: "tmux") }
 
+    /// Le canal partagé avec la connexion d'inspection.
+    ///
+    /// Chaque commande tmux — sélectionner, renommer, fermer — ouvrait sa
+    /// propre connexion ssh : poignée de main, authentification, shell, pour
+    /// une ligne. `ControlMaster` la fait passer par la connexion déjà tenue
+    /// ouverte par la boucle, ce qui la ramène à un aller-retour réseau.
+    ///
+    /// La socket vit dans le dossier temporaire, nommée d'après l'alias. Si
+    /// elle manque — la boucle n'a pas encore démarré, ou elle est tombée —
+    /// `ControlMaster=no` côté client fait simplement une connexion normale.
+    private var controlPath: String? {
+        guard let alias else { return nil }
+        let digest = alias.unicodeScalars.reduce(into: UInt64(5381)) { hash, scalar in
+            hash = hash &* 33 &+ UInt64(scalar.value)
+        }
+        return NSTemporaryDirectory() + "latch-\(String(digest, radix: 36)).sock"
+    }
+
+    /// Les options ssh d'une commande ponctuelle : elle emprunte le canal, sans
+    /// jamais chercher à l'établir elle-même.
+    private var sharedChannelOptions: [String] {
+        guard let controlPath else { return [] }
+        return ["-o", "ControlMaster=no", "-o", "ControlPath=\(controlPath)"]
+    }
+
     deinit {
         process?.terminate()
     }
@@ -194,9 +264,16 @@ final class TmuxInspector: ObservableObject {
                 "-o", "BatchMode=yes",
                 "-o", "ServerAliveInterval=30",
                 "-o", "ConnectTimeout=10",
-                alias,
-                Self.watchCommand(),
             ]
+            // La boucle tient le canal ouvert pour les commandes ponctuelles.
+            if let controlPath {
+                task.arguments? += [
+                    "-o", "ControlMaster=auto",
+                    "-o", "ControlPath=\(controlPath)",
+                    "-o", "ControlPersist=no",
+                ]
+            }
+            task.arguments? += [alias, Self.watchCommand()]
         } else {
             // Sans tmux local, il n'y a rien à observer : on n'ouvre pas un
             // shell pour qu'il échoue en boucle.
@@ -267,7 +344,7 @@ final class TmuxInspector: ObservableObject {
         // Fin de lot : on publie d'un coup, pour que la barre latérale ne
         // clignote pas pendant qu'un lot arrive morceau par morceau.
         if trimmed == Self.recordEnd {
-            windows = Dictionary(grouping: pending, by: \.session)
+            windows = honouringPendingSelections(Dictionary(grouping: pending, by: \.session))
             repositories = pendingRepositories
             sessions = pendingSessions.sorted { $0.name < $1.name }
             pending.removeAll()
@@ -293,6 +370,31 @@ final class TmuxInspector: ObservableObject {
         }
 
         if let window = Self.parse(line: trimmed) { pending.append(window) }
+    }
+
+    /// Garde la fenêtre choisie au clic tant que le serveur n'a pas répondu à
+    /// son sujet, et lâche prise dès qu'il confirme — ou que l'attente a trop
+    /// duré pour être encore crédible.
+    private func honouringPendingSelections(
+        _ fresh: [String: [LiveWindow]]
+    ) -> [String: [LiveWindow]] {
+        guard !optimisticSelections.isEmpty else { return fresh }
+        var result = fresh
+        let now = Date()
+
+        for (session, pending) in optimisticSelections {
+            guard let windows = result[session] else {
+                optimisticSelections[session] = nil
+                continue
+            }
+            let confirmed = windows.contains { $0.index == pending.index && $0.isActive }
+            if confirmed || now.timeIntervalSince(pending.since) > Self.optimismGrace {
+                optimisticSelections[session] = nil
+                continue
+            }
+            result[session] = TmuxOptimism.selecting(index: pending.index, in: windows)
+        }
+        return result
     }
 
     nonisolated static func parse(line: String) -> LiveWindow? {
@@ -333,6 +435,10 @@ final class TmuxInspector: ObservableObject {
     /// Renomme une fenêtre. tmux ne la renomme pas tout seul quand un raccourci
     /// change : c'est une action de l'utilisateur.
     func renameWindow(_ window: LiveWindow, to name: String) {
+        if let windows = windows[window.session] {
+            self.windows[window.session] =
+                TmuxOptimism.renaming(id: window.id, to: name, in: windows)
+        }
         run(["rename-window", "-t", window.target, name])
     }
 
@@ -341,6 +447,9 @@ final class TmuxInspector: ObservableObject {
     }
 
     func killWindow(_ window: LiveWindow) {
+        if let windows = windows[window.session] {
+            self.windows[window.session] = TmuxOptimism.removing(id: window.id, from: windows)
+        }
         run(["kill-window", "-t", window.target])
     }
 
@@ -361,7 +470,9 @@ final class TmuxInspector: ObservableObject {
         if let alias {
             let remote = (["tmux"] + arguments).map(ShellQuoting.quoted).joined(separator: " ")
             task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-            task.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, remote]
+            task.arguments =
+                ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+                + sharedChannelOptions + [alias, remote]
         } else {
             guard let tmux = localTmux else { return }
             task.executableURL = URL(fileURLWithPath: tmux)
@@ -375,13 +486,21 @@ final class TmuxInspector: ObservableObject {
     /// Bascule la session distante sur cette fenêtre. Le terminal attaché suit
     /// tout seul : c'est tmux qui décide de ce qu'il affiche.
     func select(_ window: LiveWindow) {
+        // La sélection se voit avant de partir : l'aller-retour ssh et le tour
+        // de boucle qui la confirmera prennent, ensemble, plusieurs secondes.
+        if let windows = windows[window.session] {
+            self.windows[window.session] =
+                TmuxOptimism.selecting(index: window.index, in: windows)
+            optimisticSelections[window.session] = (window.index, Date())
+        }
+
         let task = Process()
         if let alias {
             task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-            task.arguments = [
-                "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias,
-                "tmux select-window -t \(ShellQuoting.quoted(window.target))",
-            ]
+            task.arguments =
+                ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+                + sharedChannelOptions
+                + [alias, "tmux select-window -t \(ShellQuoting.quoted(window.target))"]
         } else {
             guard let tmux = localTmux else { return }
             task.executableURL = URL(fileURLWithPath: tmux)
