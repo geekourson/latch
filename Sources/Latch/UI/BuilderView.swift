@@ -93,7 +93,7 @@ struct BuilderView: View {
     private var preflightSection: some View {
         Section {
             ForEach($shortcut.preflight) { $step in
-                StepCard(badge: "local", isDeletable: true) {
+                StepCard(badge: "local", isDeletable: true, isReorderable: true) {
                     app.errorMessage = nil
                     shortcut.preflight.removeAll { $0.id == step.id }
                 } content: {
@@ -165,7 +165,7 @@ struct BuilderView: View {
     private var windowsSection: some View {
         Section {
             ForEach($shortcut.windows) { $window in
-                StepCard(badge: "tmux", isDeletable: true) {
+                StepCard(badge: "tmux", isDeletable: true, isReorderable: true) {
                     shortcut.windows.removeAll { $0.id == window.id }
                 } content: {
                     VStack(alignment: .leading, spacing: 7) {
@@ -591,6 +591,8 @@ private struct Field: View {
 private struct StepCard<Content: View>: View {
     let badge: String
     let isDeletable: Bool
+    /// La carte se réordonne-t-elle ? La connexion, non : elle est seule.
+    let isReorderable: Bool
     /// Une carte dépliable ; `nil` pour une carte toujours ouverte.
     var isExpanded: Binding<Bool>?
     let onDelete: () -> Void
@@ -599,19 +601,36 @@ private struct StepCard<Content: View>: View {
     init(
         badge: String,
         isDeletable: Bool,
+        isReorderable: Bool = false,
         isExpanded: Binding<Bool>? = nil,
         onDelete: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) {
         self.badge = badge
         self.isDeletable = isDeletable
+        self.isReorderable = isReorderable
         self.isExpanded = isExpanded
         self.onDelete = onDelete
         self.content = content()
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: 10) {
+            // Le corps de la carte est fait de champs de texte, qui avalent le
+            // glissement : sans gouttière, la prise se réduit à la marge et
+            // rien ne l'indique. Cette colonne est vide de contrôles sur toute
+            // la hauteur, et le trait dit où saisir.
+            if isReorderable {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color.latchTextFaint)
+                    .frame(width: 12, alignment: .center)
+                    .padding(.top, 3)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .contentShape(Rectangle())
+                    .help(localized("Glisser pour réordonner"))
+            }
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     if let isExpanded {

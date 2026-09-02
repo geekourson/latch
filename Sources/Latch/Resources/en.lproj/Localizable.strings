@@ -205,3 +205,4 @@
 "Un mot de passe est enregistré dans le trousseau pour cet hôte." = "A password is stored in the keychain for this host.";
 "Si cet hôte n'accepte décidément que les mots de passe, Latch peut en garder un dans le trousseau du système." = "If this host really will only take passwords, Latch can keep one in the system keychain.";
 "Installer les hooks sur %@ ?" = "Install the hooks on %@?";
+"Glisser pour réordonner" = "Drag to reorder";
