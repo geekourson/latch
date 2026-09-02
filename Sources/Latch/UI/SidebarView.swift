@@ -106,12 +106,7 @@ private struct ServerSection: View {
                     .foregroundStyle(Color.latchText)
 
                 if let activity = app.claudeActivity(on: server.sshAlias) {
-                    Circle()
-                        .fill(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
-                        .frame(width: 5, height: 5)
-                        .help(activity.isAwaitingPermission
-                            ? "Claude Code attend une réponse"
-                            : "Claude Code est actif")
+                    ClaudeDot(activity: activity)
                 }
 
                 Spacer(minLength: 0)
@@ -201,6 +196,16 @@ private struct ShortcutRow: View {
                 Text(shortcut.connection.tmuxSession)
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
+
+                // Le témoin du serveur dit qu'une session veut quelque chose ;
+                // celui-ci dit laquelle.
+                if let activity = app.claudeActivity(
+                    inSession: shortcut.connection.tmuxSession,
+                    on: shortcut.connection.host
+                ) {
+                    ClaudeDot(activity: activity)
+                }
+
                 Spacer(minLength: 0)
                 if isOpen {
                     Circle()

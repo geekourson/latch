@@ -34,6 +34,11 @@ final class AppState: ObservableObject {
 
     /// Les vraies fenêtres tmux, par hôte (§12, v0.4).
     @Published private(set) var liveWindows: [String: [String: [LiveWindow]]] = [:]
+
+    /// Le répertoire du panneau actif de chaque session, par hôte. C'est par là
+    /// qu'une activité Claude — qui ne connaît qu'un `cwd` — se rattache à une
+    /// session tmux.
+    @Published private(set) var liveDirectories: [String: [String: String]] = [:]
     /// L'état git du panneau actif, par hôte puis par session (§9.1).
     @Published private(set) var liveRepositories: [String: [String: LiveRepository]] = [:]
     /// Toutes les sessions tmux vues sur un hôte, raccourci ou pas.
@@ -238,6 +243,7 @@ final class AppState: ObservableObject {
                     self.liveWindows[host] = inspector.windows
                     self.liveRepositories[host] = inspector.repositories
                     self.liveSessions[host] = inspector.sessions
+                    self.liveDirectories[host] = inspector.directories
                 }
             }
             .store(in: &cancellables)
@@ -248,10 +254,10 @@ final class AppState: ObservableObject {
     /// permission est attendue — et rien d'autre. Chaque outil utilisé ne
     /// mérite pas d'interrompre qui que ce soit.
     private func announce(_ event: HookEvent, on host: String) {
-        if event.isAwaitingPermission {
-            Notifier.notifyAwaitingPermission(host: host)
-        } else if event.kind == .stop {
-            Notifier.notifyTaskFinished(host: host)
+        switch event.attention {
+        case .permission: Notifier.notifyAwaitingPermission(host: host)
+        case .reply where event.kind == .stop: Notifier.notifyTaskFinished(host: host)
+        case .reply, .none: break
         }
     }
 
@@ -467,6 +473,19 @@ final class AppState: ObservableObject {
         } catch {
             return .failure(error)
         }
+    }
+
+    /// L'activité Claude d'une session tmux précise.
+    ///
+    /// Les hooks ne savent rien de tmux : tout ce qu'ils rapportent est un
+    /// `cwd`. On le rapproche du répertoire du panneau actif, que l'inspecteur
+    /// relève au même moment. Sans correspondance, on ne rattache rien —
+    /// désigner la mauvaise session serait pire que n'en désigner aucune.
+    func claudeActivity(inSession session: String, on host: String) -> ClaudeActivity? {
+        guard let activity = claudeActivity(on: host), let directory = activity.directory,
+              let paths = liveDirectories[host]
+        else { return nil }
+        return paths[session] == directory ? activity : nil
     }
 
     func claudeActivity(on host: String) -> ClaudeActivity? {

@@ -9,6 +9,24 @@
 
 import Foundation
 
+/// Ce que Claude attend de toi.
+///
+/// La distinction compte : une autorisation bloque le travail sur-le-champ, une
+/// réponse attend simplement que tu reviennes. Les confondre, c'est soit crier
+/// pour rien, soit rater le seul moment où il fallait regarder.
+enum ClaudeAttention: Equatable {
+    /// « Claude needs your permission » : un outil est suspendu.
+    case permission
+    /// Le tour est fini, ou Claude a posé une question et attend.
+    case reply
+
+    /// L'autorisation prime : elle bloque, l'autre non.
+    static func stronger(_ lhs: ClaudeAttention?, _ rhs: ClaudeAttention?) -> ClaudeAttention? {
+        if lhs == .permission || rhs == .permission { return .permission }
+        return lhs ?? rhs
+    }
+}
+
 /// Un événement de hook, tel que Claude Code l'envoie sur l'entrée standard.
 ///
 /// Le §10 cite `SessionStart`, `PreToolUse`, `PostToolUse` et `SessionEnd`.
@@ -40,17 +58,36 @@ struct HookEvent: Equatable {
     var filePath: String?
     var cwd: String?
     var message: String?
+    /// `permission_prompt`, `idle_prompt`… Claude Code le renseigne ; les
+    /// versions plus anciennes ne le faisaient pas, d'où le repli sur le texte.
+    var notificationType: String?
     /// Horodaté à la réception : les événements servent à l'affichage en
     /// direct, et l'horloge du Mac est la seule qu'on maîtrise.
     var receivedAt: Date = Date()
 
-    /// Vrai quand Claude attend une décision de l'utilisateur.
-    var isAwaitingPermission: Bool {
-        guard kind == .notification else { return false }
+    /// Ce que Claude attend, quand il attend quelque chose.
+    var attention: ClaudeAttention? {
+        // Un tour qui se termine rend la main : c'est le signal le plus
+        // immédiat, et le seul qui arrive sans délai.
+        if kind == .stop { return .reply }
+        guard kind == .notification else { return nil }
+
+        switch notificationType {
+        case "permission_prompt": return .permission
+        case "idle_prompt": return .reply
+        default: break
+        }
+
+        // Sans `notification_type`, le texte est tout ce qu'on a.
         let text = (message ?? "").lowercased()
-        return text.contains("permission") || text.contains("approve")
-            || text.contains("autoris")
+        if text.contains("permission") || text.contains("approve")
+            || text.contains("autoris") { return .permission }
+        if text.contains("waiting for your input") || text.contains("attend") { return .reply }
+        return nil
     }
+
+    /// Vrai quand Claude est bloqué sur une autorisation.
+    var isAwaitingPermission: Bool { attention == .permission }
 
     /// Les outils qui touchent un fichier nomment leur cible différemment.
     private static let pathKeys = ["file_path", "path", "notebook_path", "filePath"]
@@ -71,6 +108,7 @@ struct HookEvent: Equatable {
         event.toolName = object["tool_name"] as? String
         event.cwd = object["cwd"] as? String
         event.message = object["message"] as? String
+        event.notificationType = object["notification_type"] as? String
 
         if let input = object["tool_input"] as? [String: Any] {
             for key in pathKeys {
@@ -92,8 +130,15 @@ struct ClaudeActivity: Equatable {
     /// Le fichier en cours de modification, affiché en direct.
     var currentFile: String?
     var currentTool: String?
-    var isAwaitingPermission = false
+    /// Ce que Claude attend, ou rien s'il travaille.
+    var attention: ClaudeAttention?
+    /// Le répertoire de la session Claude, seul lien avec une session tmux :
+    /// les hooks ne savent rien de tmux.
+    var directory: String?
     var lastEventAt: Date?
+
+    var isAwaitingPermission: Bool { attention == .permission }
+    var needsAttention: Bool { attention != nil }
 
     /// Le nom court du fichier, pour la barre d'état.
     var currentFileName: String? {
@@ -102,35 +147,40 @@ struct ClaudeActivity: Equatable {
 
     mutating func apply(_ event: HookEvent) {
         lastEventAt = event.receivedAt
+        if let cwd = event.cwd { directory = cwd }
 
         switch event.kind {
         case .sessionStart:
             isActive = true
-            isAwaitingPermission = false
+            attention = nil
 
         case .sessionEnd:
             isActive = false
             currentFile = nil
             currentTool = nil
-            isAwaitingPermission = false
+            attention = nil
 
+        // Un outil qui démarre ou se termine, c'est Claude qui travaille :
+        // ce qu'il attendait ne l'attend plus.
         case .preToolUse:
             isActive = true
             currentTool = event.toolName
+            attention = nil
             if let path = event.filePath { currentFile = path }
 
         case .postToolUse:
             isActive = true
             currentTool = nil
+            attention = nil
 
         case .stop:
             isActive = true
             currentTool = nil
-            isAwaitingPermission = false
+            attention = event.attention
 
         case .notification:
             isActive = true
-            if event.isAwaitingPermission { isAwaitingPermission = true }
+            attention = ClaudeAttention.stronger(event.attention, attention)
 
         case .unknown:
             break

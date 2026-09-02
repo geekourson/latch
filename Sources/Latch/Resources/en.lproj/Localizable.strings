@@ -206,3 +206,11 @@
 "Si cet hôte n'accepte décidément que les mots de passe, Latch peut en garder un dans le trousseau du système." = "If this host really will only take passwords, Latch can keep one in the system keychain.";
 "Installer les hooks sur %@ ?" = "Install the hooks on %@?";
 "Glisser pour réordonner" = "Drag to reorder";
+
+/* --- Ce que Claude Code attend (§10) --- */
+"Claude attend une autorisation" = "Claude is waiting for permission";
+"Claude attend ta réponse" = "Claude is waiting for your reply";
+"Claude Code est actif" = "Claude Code is running";
+"Claude attend" = "needs you";
+"à toi" = "your turn";
+"Claude Code" = "Claude Code";

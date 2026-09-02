@@ -135,6 +135,9 @@ final class TmuxInspector: ObservableObject {
     /// désigne : sans ça, elles s'accumulent sans que personne les voie.
     @Published private(set) var sessions: [LiveSession] = []
 
+    /// Le répertoire du panneau actif de chaque session.
+    @Published private(set) var directories: [String: String] = [:]
+
     /// Les sélections décidées ici et pas encore confirmées par le serveur,
     /// avec l'instant du clic. Une réponse déjà en vol quand on a cliqué
     /// porte l'ancienne fenêtre active : sans ça, la sélection reviendrait en
@@ -150,6 +153,7 @@ final class TmuxInspector: ObservableObject {
     nonisolated static let separator = "\u{1F}"
     nonisolated private static let recordEnd = "LATCH_END"
     nonisolated static let gitPrefix = "LATCH_GIT"
+    nonisolated static let pathPrefix = "LATCH_CWD"
     nonisolated static let sessionPrefix = "LATCH_SES"
 
     /// Une boucle côté serveur plutôt qu'un ssh par sondage : une connexion,
@@ -185,6 +189,9 @@ final class TmuxInspector: ObservableObject {
             "\(tmux) list-panes -a -f '#{&&:#{window_active},#{pane_active}}'",
             "-F '\(paneFormat)' 2>/dev/null |",
             "while IFS='\(separator)' read -r s p; do",
+            // Émis pour tout panneau, dépôt ou non : c'est ce qui relie une
+            // session Claude — qui ne connaît qu'un `cwd` — à une session tmux.
+            "printf '\(pathPrefix)%s\(separator)%s\\n' \"$s\" \"$p\";",
             "b=$(git -C \"$p\" rev-parse --abbrev-ref HEAD 2>/dev/null) || continue;",
             "d=$(git -C \"$p\" diff --shortstat 2>/dev/null);",
             "printf '\(gitPrefix)%s\(separator)%s\(separator)%s\\n' \"$s\" \"$b\" \"$d\";",
@@ -197,6 +204,7 @@ final class TmuxInspector: ObservableObject {
     private var pending: [LiveWindow] = []
     private var pendingRepositories: [String: LiveRepository] = [:]
     private var pendingSessions: [LiveSession] = []
+    private var pendingDirectories: [String: String] = [:]
     private var retryTask: Task<Void, Never>?
     private var attempt = 0
     private var isStopped = false
@@ -254,6 +262,7 @@ final class TmuxInspector: ObservableObject {
         windows = [:]
         repositories = [:]
         sessions = []
+        directories = [:]
     }
 
     private func launch() {
@@ -351,9 +360,11 @@ final class TmuxInspector: ObservableObject {
             windows = honouringPendingSelections(Dictionary(grouping: pending, by: \.session))
             repositories = pendingRepositories
             sessions = pendingSessions.sorted { $0.name < $1.name }
+            directories = pendingDirectories
             pending.removeAll()
             pendingRepositories.removeAll()
             pendingSessions.removeAll()
+            pendingDirectories.removeAll()
             return
         }
 
@@ -361,6 +372,15 @@ final class TmuxInspector: ObservableObject {
             let fields = String(trimmed.dropFirst(Self.sessionPrefix.count))
                 .components(separatedBy: Self.separator)
             if let session = LiveSession.parse(fields: fields) { pendingSessions.append(session) }
+            return
+        }
+
+        if trimmed.hasPrefix(Self.pathPrefix) {
+            let fields = String(trimmed.dropFirst(Self.pathPrefix.count))
+                .components(separatedBy: Self.separator)
+            if fields.count >= 2, !fields[0].isEmpty, !fields[1].isEmpty {
+                pendingDirectories[fields[0]] = fields[1]
+            }
             return
         }
 

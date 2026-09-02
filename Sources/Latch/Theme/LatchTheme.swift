@@ -26,6 +26,7 @@ enum LatchTheme {
     static let accent = NSColor(hex: 0xC89B6A)   // ambre
     static let success = NSColor(hex: 0x8FB09A)  // sauge
     static let claude = NSColor(hex: 0xB3A0D6)   // violet Claude Code
+    static let attention = NSColor(hex: 0xD97757) // terracotta : ça bloque
 
     // MARK: - Typographie
 
@@ -95,4 +96,5 @@ extension SwiftUI.Color {
     static let latchAccent = SwiftUI.Color(LatchTheme.accent)
     static let latchSuccess = SwiftUI.Color(LatchTheme.success)
     static let latchClaude = SwiftUI.Color(LatchTheme.claude)
+    static let latchAttention = SwiftUI.Color(LatchTheme.attention)
 }

@@ -183,12 +183,10 @@ private struct ClaudeIndicator: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
-                .frame(width: 6, height: 6)
+            ClaudeDot(activity: activity, size: 6)
 
-            Text(activity.isAwaitingPermission ? "Claude attend" : "Claude Code")
-                .foregroundStyle(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
+            Text(ClaudeDot.shortWording(for: activity))
+                .foregroundStyle(ClaudeDot.color(for: activity))
 
             if let file = activity.currentFileName {
                 Text(file)
