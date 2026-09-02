@@ -267,6 +267,10 @@ final class TmuxInspector: ObservableObject {
             ]
             // La boucle tient le canal ouvert pour les commandes ponctuelles.
             if let controlPath {
+                // Une socket laissée par une boucle tuée empêcherait d'ouvrir
+                // le canal, et les commandes repartiraient chacune de zéro
+                // sans que rien ne le dise. La boucle en est propriétaire.
+                try? FileManager.default.removeItem(atPath: controlPath)
                 task.arguments? += [
                     "-o", "ControlMaster=auto",
                     "-o", "ControlPath=\(controlPath)",
