@@ -25,6 +25,9 @@ struct BuilderView: View {
     /// pas, `onChange` arrivant au tour de boucle suivant.
     @State private var lastGeneratedPreview = ""
     @State private var isConnectionExpanded = true
+    /// Le champ à activer après un ajout : on vient de cliquer « Ajouter », on
+    /// veut taper, pas chercher où.
+    @FocusState private var focused: UUID?
 
     init(shortcut: Shortcut) {
         _shortcut = State(initialValue: shortcut)
@@ -98,6 +101,7 @@ struct BuilderView: View {
                         TextField("VPN", text: $step.label)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium))
+                            .focused($focused, equals: step.id)
                         TextField("scutil --nc status Maison", text: $step.command)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11.5, design: .monospaced))
@@ -118,7 +122,13 @@ struct BuilderView: View {
             }
 
             AddRow(title: "Ajouter un pré-vol") {
-                shortcut.preflight.append(Preflight(label: "Étape", command: ""))
+                // Créé **vide** : un nom par défaut masque l'exemple et fait
+                // passer le champ pour une étiquette. Le curseur y va tout seul.
+                let step = Preflight(label: "", command: "")
+                shortcut.preflight.append(step)
+                // La ligne n'existe pas encore à cet instant : viser le champ
+                // avant qu'il soit là ne fait rien.
+                DispatchQueue.main.async { focused = step.id }
             }
         } header: {
             OptionalSectionHeader(
@@ -162,6 +172,7 @@ struct BuilderView: View {
                         TextField("logs", text: $window.name)
                             .textFieldStyle(.plain)
                             .font(.system(size: 12, weight: .medium))
+                            .focused($focused, equals: window.id)
                         TextField("journalctl -fu api", text: $window.command)
                             .textFieldStyle(.plain)
                             .font(.system(size: 11.5, design: .monospaced))
@@ -177,7 +188,9 @@ struct BuilderView: View {
             }
 
             AddRow(title: "Ajouter une fenêtre") {
-                shortcut.windows.append(TmuxWindow(name: "fenêtre", command: ""))
+                let window = TmuxWindow(name: "", command: "")
+                shortcut.windows.append(window)
+                DispatchQueue.main.async { focused = window.id }
             }
         } header: {
             OptionalSectionHeader(
