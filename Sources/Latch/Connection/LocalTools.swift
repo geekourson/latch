@@ -22,13 +22,20 @@ enum LocalTools {
     /// Les emplacements habituels, dans l'ordre où on les préfère. Le `PATH`
     /// n'est pas consulté : celui d'une app lancée depuis le Finder ne
     /// contient rien d'utile.
-    static let searchPaths = [
-        "/opt/homebrew/bin",   // Homebrew sur Apple Silicon
-        "/usr/local/bin",      // Homebrew sur Intel, MacPorts
-        "/opt/local/bin",      // MacPorts
-        "/usr/bin",
-        "/bin",
-    ]
+    ///
+    /// `~/.local/bin` vient en premier parce que c'est là que l'installeur
+    /// officiel de Claude Code pose son binaire — et que ce dossier n'est
+    /// jamais dans le `PATH` de launchd.
+    static var searchPaths: [String] {
+        [
+            NSHomeDirectory() + "/.local/bin",
+            "/opt/homebrew/bin",   // Homebrew sur Apple Silicon
+            "/usr/local/bin",      // Homebrew sur Intel, MacPorts
+            "/opt/local/bin",      // MacPorts
+            "/usr/bin",
+            "/bin",
+        ]
+    }
 
     /// Ce que launchd donne à une app sans réglage particulier.
     static let launchdPaths = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
@@ -57,11 +64,19 @@ enum LocalTools {
         // sens ici, et l'annoncer manquant afficherait un bandeau pour rien.
         result.hasMoshServer = true
 
-        if let tmux = path(of: "tmux", fileManager: fileManager) {
-            result.hasTmux = true
-            result.tmuxVersion = version(of: tmux)
-            if isOffPath("tmux", fileManager: fileManager) {
-                result.offPathTools["tmux"] = tmux
+        for tool in ["tmux", "claude"] {
+            guard let found = path(of: tool, fileManager: fileManager) else { continue }
+            if tool == "tmux" {
+                result.hasTmux = true
+                result.tmuxVersion = version(of: found)
+            } else {
+                result.hasClaude = true
+            }
+            // `~/.local/bin` et `/usr/local/bin` sont absents du PATH de
+            // launchd : l'outil existe, mais il faudra l'appeler par son
+            // chemin absolu.
+            if isOffPath(tool, fileManager: fileManager) {
+                result.offPathTools[tool] = found
             }
         }
         return result

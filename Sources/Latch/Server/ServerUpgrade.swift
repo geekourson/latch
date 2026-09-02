@@ -142,15 +142,19 @@ enum ServerUpgradePlanner {
                 name: "tmux", isPresent: probe.hasTmux, version: probe.tmuxVersion,
                 offPathAt: probe.offPathTools["tmux"]
             ),
-            ToolStatus(
-                name: "mosh-server", isPresent: probe.hasMoshServer,
-                offPathAt: probe.offPathTools["mosh-server"]
-            ),
+            // Une session qui n'ouvre aucune connexion n'a que faire de mosh :
+            // l'afficher, même satisfait, ne dit rien à personne.
+            wantsMosh
+                ? ToolStatus(
+                    name: "mosh-server", isPresent: probe.hasMoshServer,
+                    offPathAt: probe.offPathTools["mosh-server"]
+                )
+                : nil,
             ToolStatus(
                 name: "claude", isPresent: probe.hasClaude,
                 offPathAt: probe.offPathTools["claude"]
             ),
-        ]
+        ].compactMap { $0 }
         plan.offPathTools = probe.offPathTools
 
         if !probe.hasTmux { plan.missingPackages.append("tmux") }

@@ -259,7 +259,9 @@ final class LocalToolsTests: XCTestCase {
             XCTAssertTrue(path.hasPrefix("/"), path)
         }
         XCTAssertTrue(LocalTools.searchPaths.contains("/opt/homebrew/bin"))
-        XCTAssertEqual(LocalTools.searchPaths.first, "/opt/homebrew/bin", "Homebrew d'abord")
+        // L'installeur officiel de Claude Code pose son binaire là, et ce
+        // dossier n'est jamais dans le PATH de launchd.
+        XCTAssertEqual(LocalTools.searchPaths.first, NSHomeDirectory() + "/.local/bin")
     }
 
     /// Ce que launchd donne à une app sans réglage : c'est la référence pour
@@ -285,6 +287,21 @@ final class LocalToolsTests: XCTestCase {
     func testMoshIsIrrelevantLocally() {
         XCTAssertTrue(LocalTools.probe().hasMoshServer)
         XCTAssertEqual(LocalTools.probe().osID, "macos")
+        // Et le diagnostic n'en parle pas : une ligne « mosh-server ✓ » sur une
+        // session locale ne dit rien à personne.
+        let plan = ServerUpgradePlanner.plan(for: LocalTools.probe(), wantsMosh: false)
+        XCTAssertFalse(plan.diagnostics.contains { $0.name == "mosh-server" })
+        XCTAssertTrue(plan.diagnostics.contains { $0.name == "claude" })
+    }
+
+    /// Claude Code est souvent installé sur le Mac aussi, dans `~/.local/bin`.
+    /// Le déclarer absent parce qu'on ne l'y cherchait pas était un mensonge.
+    func testTheLocalProbeLooksForClaude() {
+        let probe = LocalTools.probe()
+        XCTAssertEqual(probe.hasClaude, LocalTools.path(of: "claude") != nil)
+        if let claude = LocalTools.path(of: "claude"), LocalTools.isOffPath("claude") {
+            XCTAssertEqual(probe.offPathTools["claude"], claude)
+        }
     }
 
     /// Et la sonde locale dit la vérité sur cette machine-ci, quelle qu'elle
