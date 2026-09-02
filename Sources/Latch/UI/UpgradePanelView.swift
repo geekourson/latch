@@ -18,6 +18,7 @@ struct UpgradePanelView: View {
     let server: Server
 
     @State private var freeformCommand = ""
+    @State private var showsHookScript = false
 
     private var plan: UpgradePlan {
         ServerUpgradePlanner.plan(for: server.probe)
@@ -42,6 +43,7 @@ struct UpgradePanelView: View {
                     if let claude = plan.claudeCommand {
                         claudeBlock(claude)
                     }
+                    hooksBlock
                     localMoshBlock
                     pathHint
                     skipToggle
@@ -191,6 +193,46 @@ struct UpgradePanelView: View {
 
             CommandBox(command: command)
             actions(for: command)
+        }
+    }
+
+    // MARK: Hooks Claude Code (§10)
+
+    /// Rien n'est installé en silence, et ce qui sera exécuté est montré en
+    /// clair avant de l'être — le script complet est dépliable.
+    private var hooksBlock: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Hooks Latch", systemImage: "bolt.horizontal")
+                .labelStyle(SectionLabelStyle())
+
+            Text("Ils font remonter l'activité de Claude Code : l'indicateur, "
+                + "le fichier en cours, et une notification quand une "
+                + "permission est attendue.")
+                .font(.system(size: 11))
+                .foregroundStyle(Color.latchTextDim)
+                .fixedSize(horizontal: false, vertical: true)
+
+            DisclosureGroup(isExpanded: $showsHookScript) {
+                CommandBox(command: HookInstaller.hookScript)
+                    .padding(.top, 6)
+            } label: {
+                Text("Voir le script installé sur le serveur")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchAccent)
+            }
+
+            Text("Les hooks existants de ~/.claude/settings.json sont "
+                + "conservés, et une copie est mise de côté avant modification.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color.latchTextFaint)
+                .fixedSize(horizontal: false, vertical: true)
+
+            actions(for: HookInstaller.installCommand)
+
+            Text(HookInstaller.uninstallHint)
+                .font(.system(size: 10))
+                .foregroundStyle(Color.latchTextFaint)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

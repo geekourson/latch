@@ -25,6 +25,12 @@ final class AppState: ObservableObject {
     /// Erreur de validation ou d'ouverture, affichée sans bloquer.
     @Published var errorMessage: String?
 
+    /// Ce que les hooks du §10 racontent, par hôte.
+    @Published private(set) var claudeActivity: [String: ClaudeActivity] = [:]
+
+    /// Une connexion ssh secondaire par hôte ayant un onglet ouvert.
+    private var hookStreams: [String: HookStream] = [:]
+
     private var cancellables = Set<AnyCancellable>()
 
     /// Le store est construit ici et pas dans la valeur par défaut du
@@ -117,9 +123,55 @@ final class AppState: ObservableObject {
             )
             tabs.append(session)
             selectedTabID = session.id
+            followHooks(on: shortcut.connection.host)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Hooks Claude Code (§10)
+
+    /// Ouvre — au plus une fois par hôte — la connexion secondaire qui suit le
+    /// journal d'événements. Elle échoue en silence si les hooks ne sont pas
+    /// installés : le fichier est simplement vide.
+    private func followHooks(on host: String) {
+        guard !host.isEmpty, hookStreams[host] == nil else { return }
+
+        let stream = HookStream(alias: host)
+        stream.onEvent = { [weak self, weak stream] event in
+            guard let self, let stream else { return }
+            self.claudeActivity[host] = stream.activity
+            self.announce(event, on: host)
+        }
+        hookStreams[host] = stream
+        stream.start()
+    }
+
+    /// Le §10 demande une notification quand une tâche se termine ou qu'une
+    /// permission est attendue — et rien d'autre. Chaque outil utilisé ne
+    /// mérite pas d'interrompre qui que ce soit.
+    private func announce(_ event: HookEvent, on host: String) {
+        if event.isAwaitingPermission {
+            Notifier.notifyAwaitingPermission(host: host)
+        } else if event.kind == .stop {
+            Notifier.notifyTaskFinished(host: host)
+        }
+    }
+
+    /// Coupe les flux des hôtes qui n'ont plus d'onglet : une connexion ssh
+    /// qui ne sert plus à rien n'a pas à rester ouverte.
+    private func pruneHookStreams() {
+        let liveHosts = Set(tabs.map(\.host))
+        for (host, stream) in hookStreams where !liveHosts.contains(host) {
+            stream.stop()
+            hookStreams.removeValue(forKey: host)
+            claudeActivity.removeValue(forKey: host)
+        }
+    }
+
+    func claudeActivity(on host: String) -> ClaudeActivity? {
+        guard let activity = claudeActivity[host], activity.isActive else { return nil }
+        return activity
     }
 
     /// Ouvre un terminal sur un hôte sans passer par un raccourci — ce que fait
@@ -146,12 +198,14 @@ final class AppState: ObservableObject {
         if selectedTabID == tabID {
             selectedTabID = tabs.indices.contains(index) ? tabs[index].id : tabs.last?.id
         }
+        pruneHookStreams()
     }
 
     func closeAll() {
         tabs.forEach { $0.terminate() }
         tabs.removeAll()
         selectedTabID = nil
+        pruneHookStreams()
     }
 
     // MARK: - État des serveurs (§9.1)

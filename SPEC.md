@@ -537,6 +537,16 @@ base16 et iTerm2 (§9.3), sonde serveur et cascade de dégradation (§6).
 
 `MoshDriver` avec binaire embarqué, reconnexion au réveil, hooks Claude Code.
 
+Le §10 ne cite que `SessionStart`, `PreToolUse`, `PostToolUse` et `SessionEnd`.
+Deux autres événements sont indispensables à ce que le même paragraphe demande
+— prévenir « quand une tâche se termine ou qu'une permission est attendue » :
+`Stop` marque la fin d'une réponse, et `Notification` porte le motif
+`permission_prompt`. Les six sont installés.
+
+mosh étant sous GPL-3.0-or-later, chaque release publie à côté du `.dmg` les
+sources exactes du `mosh-client` embarqué et le script qui l'a compilé. Latch,
+sous MIT, se contente de le lancer comme exécutable séparé.
+
 ### v0.4 — C'est distinctif
 
 `tmux -CC` pour peupler la barre latérale avec les vraies fenêtres tmux, serveur

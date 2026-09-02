@@ -10,11 +10,11 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.3 en cours.** La v0.2 est complète — raccourcis persistés en JSON, barre
-latérale, onglets, écran du builder, import de thèmes, sonde serveur et cascade
-de dégradation. La v0.3 apporte la reconnexion au réveil et la couche des
-drivers de connexion ; restent les hooks Claude Code. Voir la
-[feuille de route](SPEC.md#12-feuille-de-route).
+**v0.3.** Raccourcis persistés en JSON, barre latérale, onglets, écran du
+builder, import de thèmes, sonde serveur et cascade de dégradation, reconnexion
+au réveil, drivers de connexion et hooks Claude Code. Reste la v0.4 : `tmux -CC`
+pour peupler la barre latérale avec les vraies fenêtres tmux, et le serveur MCP.
+Voir la [feuille de route](SPEC.md#12-feuille-de-route).
 
 ### La session se rattrape toute seule
 
@@ -49,6 +49,21 @@ tmux new -A -s notes -c ~/notes
 L'échappement est la partie fragile, et elle est testée en faisant réellement
 traverser un `/bin/sh` aux commandes produites, avec de faux `tmux`, `ssh` et
 `mosh` qui impriment les arguments reçus.
+
+### Claude Code, vu depuis le Mac
+
+Claude Code tourne **sur le serveur**, pas sur le Mac. Latch en suit l'activité
+par ses hooks : un petit script écrit chaque événement sur une ligne dans
+`~/.latch/events.jsonl`, qu'une connexion ssh secondaire suit en direct.
+
+La barre latérale et la barre d'état montrent alors si Claude est actif et quel
+fichier il est en train de toucher ; une notification et un rebond du Dock
+préviennent quand une tâche se termine ou qu'**une permission est attendue** —
+et rien d'autre, parce que chaque outil utilisé ne mérite pas d'interrompre.
+
+L'installation se fait depuis le panneau d'amélioration, script visible avant
+exécution. Les hooks déjà présents dans `~/.claude/settings.json` sont
+conservés, et une copie est mise de côté avant modification.
 
 ### Le serveur est sondé, jamais modifié
 

@@ -125,6 +125,9 @@ private struct StatusBar: View {
         HStack(spacing: 10) {
             if let session = app.selectedTab {
                 SessionStatus(session: session)
+                if let activity = app.claudeActivity(on: session.host) {
+                    ClaudeIndicator(activity: activity)
+                }
             } else {
                 Text("aucune session")
                     .foregroundStyle(Color.latchTextFaint)
@@ -151,6 +154,29 @@ private struct StatusBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 7)
         .background(Color.latchSurface)
+    }
+}
+
+/// L'indicateur du §10, alimenté par les hooks : actif, fichier en cours, et
+/// l'attente d'une permission — le seul cas qui mérite d'attirer l'œil.
+private struct ClaudeIndicator: View {
+    let activity: ClaudeActivity
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
+                .frame(width: 6, height: 6)
+
+            Text(activity.isAwaitingPermission ? "Claude attend" : "Claude Code")
+                .foregroundStyle(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
+
+            if let file = activity.currentFileName {
+                Text(file)
+                    .foregroundStyle(Color.latchTextFaint)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 

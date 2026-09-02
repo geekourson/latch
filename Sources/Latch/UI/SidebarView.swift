@@ -70,6 +70,16 @@ private struct ServerSection: View {
                 Text(server.name)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.latchText)
+
+                if let activity = app.claudeActivity(on: server.sshAlias) {
+                    Circle()
+                        .fill(activity.isAwaitingPermission ? Color.latchAccent : Color.latchClaude)
+                        .frame(width: 5, height: 5)
+                        .help(activity.isAwaitingPermission
+                            ? "Claude Code attend une réponse"
+                            : "Claude Code est actif")
+                }
+
                 Spacer(minLength: 0)
                 if needsUpgrade {
                     Button {
