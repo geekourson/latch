@@ -2,9 +2,9 @@
 //  TerminalSession.swift
 //  Latch
 //
-//  Le pont entre un `PTYProcess` et l'interface : un onglet, une commande, un
-//  pseudo-terminal. La commande vient du `CommandBuilder` ; cette classe ne
-//  sait pas la construire et ne cherche pas à l'interpréter.
+//  Un onglet : une commande, un pseudo-terminal, et le cycle de vie du §8.
+//  La commande vient du `CommandBuilder` ; cette classe ne sait pas la
+//  construire et ne cherche jamais à l'interpréter.
 //
 
 import Combine
@@ -15,30 +15,53 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     nonisolated let id = UUID()
 
+    // MARK: État publié
+
     /// Titre annoncé par le terminal distant (séquence OSC 0/2).
     @Published private(set) var title: String
-    @Published private(set) var state: PTYState = .idle
-    /// Dernière taille annoncée par la vue, utile à la barre d'état.
+    /// L'état que lit l'interface (§3.2).
+    @Published private(set) var connection: ConnectionState = .idle
+    /// Dernière taille annoncée par la vue.
     @Published private(set) var size: (rows: Int, cols: Int) = (0, 0)
+    /// Code de sortie du dernier process, pour la barre d'état.
+    @Published private(set) var lastExitCode: Int32?
 
-    /// Le nom affiché dans la barre latérale et l'onglet.
+    // MARK: Identité
+
     let name: String
     /// La commande exécutée localement via `/bin/sh -c`.
     let command: String
-    /// Le raccourci d'où vient cet onglet, s'il y en a un.
     let shortcutID: Shortcut.ID?
     /// L'alias de l'hôte, pour la pastille d'état de la barre latérale.
     let host: String
     /// Ce que la sonde a imposé de perdre en route (§6).
     let degradation: Degradation
 
-    private let pty = PTYProcess()
-    private var cancellables = Set<AnyCancellable>()
+    var policy = ReconnectionPolicy()
 
-    /// Octets reçus du process, à pousser dans le terminal.
-    var output: AnyPublisher<Data, Never> { pty.output }
+    // MARK: Interne
 
-    var isRunning: Bool { state == .running }
+    private var pty = PTYProcess()
+    private var ptyBindings = Set<AnyCancellable>()
+    private let outputSubject = PassthroughSubject<Data, Never>()
+
+    private var lastGeometry: (rows: UInt16, cols: UInt16) = (24, 80)
+    private var connectedAt: Date?
+    private var reconnectAttempt = 0
+    private var reconnectTask: Task<Void, Never>?
+    /// Vrai quand la fermeture vient de l'utilisateur : on ne relance rien.
+    private var isClosing = false
+    /// Vrai entre l'endormissement et le réveil.
+    private var isSuspended = false
+
+    /// Octets reçus du process. Le sujet appartient à la session et non au PTY :
+    /// une reconnexion remplace le PTY, et la vue ne doit pas perdre son
+    /// abonnement au passage.
+    var output: AnyPublisher<Data, Never> { outputSubject.eraseToAnyPublisher() }
+
+    var isRunning: Bool { connection.isLive }
+
+    // MARK: - Cycle de vie
 
     init(
         name: String,
@@ -53,22 +76,70 @@ final class TerminalSession: ObservableObject, Identifiable {
         self.host = host
         self.degradation = degradation
         self.title = name
-
-        pty.state
-            .sink { [weak self] in self?.state = $0 }
-            .store(in: &cancellables)
+        bind(pty)
     }
 
     /// Démarre le process. Appelé par la vue une fois qu'elle connaît sa taille,
     /// pour que le premier `winsize` soit déjà le bon.
     func start(rows: UInt16, cols: UInt16) {
-        guard state == .idle else { return }
+        lastGeometry = (rows, cols)
+        guard connection == .idle else { return }
+        launch()
+    }
+
+    private func launch() {
+        connection = .connecting
         do {
-            try pty.start(command: command, rows: rows, cols: cols)
+            try pty.start(command: command, rows: lastGeometry.rows, cols: lastGeometry.cols)
         } catch {
-            NSLog("Latch: échec du lancement de « \(command) » — \(error.localizedDescription)")
+            connection = .failed(reason: error.localizedDescription)
         }
     }
+
+    private func bind(_ pty: PTYProcess) {
+        ptyBindings.removeAll()
+        pty.output
+            .sink { [weak self] in self?.outputSubject.send($0) }
+            .store(in: &ptyBindings)
+        pty.state
+            .sink { [weak self] in self?.handle($0) }
+            .store(in: &ptyBindings)
+    }
+
+    private func handle(_ state: PTYState) {
+        switch state {
+        case .idle:
+            break
+
+        case .running:
+            // Le compteur de tentatives n'est **pas** remis à zéro ici : un
+            // process qui démarre puis meurt aussitôt le remettrait à zéro à
+            // chaque essai, et la boucle serait éternelle. C'est `failOrRetry`
+            // qui le remet à zéro, une fois la connexion prouvée durable.
+            connectedAt = Date()
+            connection = degradation.isDegraded
+                ? .degraded(reason: degradation.bannerTitle)
+                : .connected
+
+        case .exited(let code):
+            lastExitCode = code
+            guard !isClosing else { return }
+            if isSuspended {
+                // Mort pendant la veille : on s'en occupe au réveil, pas ici.
+                connection = .reconnecting(attempt: 0)
+                return
+            }
+            if reconnectAttempt > 0 {
+                // On était en train de retenter : ce départ est un échec.
+                failOrRetry()
+            } else {
+                connection = .idle
+                connectedAt = nil
+            }
+        }
+    }
+
+    // MARK: - Entrées / sorties
 
     func send(_ data: ArraySlice<UInt8>) {
         pty.send(Data(data))
@@ -82,14 +153,115 @@ final class TerminalSession: ObservableObject, Identifiable {
 
     func resize(rows: Int, cols: Int) {
         size = (rows, cols)
-        pty.resize(rows: UInt16(max(0, rows)), cols: UInt16(max(0, cols)))
+        lastGeometry = (UInt16(max(1, rows)), UInt16(max(1, cols)))
+        pty.resize(rows: lastGeometry.rows, cols: lastGeometry.cols)
     }
 
     func updateTitle(_ new: String) {
         title = new.isEmpty ? name : new
     }
 
+    // MARK: - Veille et réveil (§8)
+
+    /// Le Mac s'endort. On marque, on ne tue rien : avec mosh, la session
+    /// survit sans qu'on ait à toucher à quoi que ce soit.
+    func systemWillSleep() {
+        isSuspended = true
+        guard connection.isLive else { return }
+        connection = .reconnecting(attempt: 0)
+    }
+
+    /// Le Mac se réveille. Si le process est vivant — le cas normal avec mosh —
+    /// il n'y a rien à faire. S'il est mort, on relance exactement la même
+    /// commande : `tmux new -A` retrouve la session telle qu'elle était.
+    func systemDidWake() {
+        isSuspended = false
+        guard !isClosing else { return }
+
+        if pty.currentState == .running {
+            connection = degradation.isDegraded
+                ? .degraded(reason: degradation.bannerTitle)
+                : .connected
+            return
+        }
+
+        // Un échec définitif reste définitif : on n'annule pas la décision de
+        // l'utilisateur en rouvrant le capot.
+        if case .failed = connection { return }
+
+        reconnectAttempt = 0
+        scheduleReconnect(immediately: true)
+    }
+
+    /// Relance à la demande, après un échec — c'est l'action que le §8 attend
+    /// de l'utilisateur plutôt qu'une boucle silencieuse.
+    func reconnectNow() {
+        guard !isClosing else { return }
+        reconnectAttempt = 0
+        lastExitCode = nil
+        scheduleReconnect(immediately: true)
+    }
+
+    private func scheduleReconnect(immediately: Bool) {
+        reconnectTask?.cancel()
+        reconnectAttempt += 1
+        let attempt = reconnectAttempt
+        let delay = immediately ? 0 : policy.delay(forAttempt: attempt)
+        connection = .reconnecting(attempt: attempt)
+
+        reconnectTask = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+            guard !Task.isCancelled, let self, !self.isClosing else { return }
+            self.relaunch()
+        }
+    }
+
+    /// Remplace le PTY : l'ancien est mort, et un `PTYProcess` ne se rejoue pas.
+    private func relaunch() {
+        pty.terminate()
+        pty = PTYProcess()
+        bind(pty)
+        connectedAt = nil
+
+        do {
+            try pty.start(command: command, rows: lastGeometry.rows, cols: lastGeometry.cols)
+        } catch {
+            failOrRetry(reason: error.localizedDescription)
+        }
+    }
+
+    /// Une tentative vient d'échouer. On retente, ou on s'arrête et on attend.
+    private func failOrRetry(reason: String? = nil) {
+        let lifetime = connectedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let reallyFailed = connectedAt == nil || policy.countsAsFailure(lifetime: lifetime)
+
+        // Une connexion qui a vraiment vécu puis s'est terminée n'est pas un
+        // échec d'authentification : c'est une session qu'on a quittée.
+        guard reallyFailed else {
+            connection = .idle
+            reconnectAttempt = 0
+            return
+        }
+
+        guard policy.shouldRetry(afterAttempt: reconnectAttempt) else {
+            connection = .failed(reason: reason ?? policy.giveUpReason(lastExitCode: lastExitCode))
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            return
+        }
+        scheduleReconnect(immediately: false)
+    }
+
+    // MARK: - Fermeture
+
+    /// L'utilisateur ferme l'onglet : on annule la reconnexion en cours, comme
+    /// le demande le §8, et on coupe le process.
     func terminate() {
+        isClosing = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
         pty.terminate()
     }
 }

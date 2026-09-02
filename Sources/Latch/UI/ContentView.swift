@@ -130,6 +130,15 @@ private struct StatusBar: View {
                     .foregroundStyle(Color.latchTextFaint)
             }
 
+            if case .failed(let reason) = app.selectedTab?.connection ?? .idle {
+                Text(reason)
+                    .foregroundStyle(Color.latchAccent)
+                    .lineLimit(1)
+                Button("Réessayer") { app.selectedTab?.reconnectNow() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.latchAccent)
+            }
+
             Spacer()
 
             if let error = app.store.lastError {
@@ -175,18 +184,18 @@ private struct SessionStatus: View {
     }
 
     private var color: Color {
-        switch session.state {
-        case .running: return session.degradation.isDegraded ? .latchAccent : .latchSuccess
+        switch session.connection {
+        case .connected: return .latchSuccess
+        case .degraded, .failed: return .latchAccent
+        case .connecting, .reconnecting: return .latchClaude
         case .idle: return .latchTextFaint
-        case .exited: return .latchAccent
         }
     }
 
     private var label: String {
-        switch session.state {
-        case .idle: return "en attente"
-        case .running: return session.degradation.isDegraded ? "latched on · dégradé" : "latched on"
-        case .exited(let code): return code == 0 ? "terminé" : "terminé (\(code))"
+        if case .idle = session.connection, let code = session.lastExitCode {
+            return code == 0 ? "terminé" : "terminé (\(code))"
         }
+        return session.connection.label
     }
 }

@@ -64,10 +64,12 @@ private struct TabItem: View {
     }
 
     private var dotColor: Color {
-        switch session.state {
-        case .running: return session.degradation.isDegraded ? .latchAccent : .latchSuccess
+        switch session.connection {
+        case .connected: return .latchSuccess
+        case .degraded: return .latchAccent
+        case .connecting, .reconnecting: return .latchClaude
+        case .failed: return .latchAccent
         case .idle: return .latchTextFaint
-        case .exited: return .latchAccent
         }
     }
 }

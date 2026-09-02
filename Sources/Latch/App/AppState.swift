@@ -6,6 +6,7 @@
 //  se persiste vit dans `SessionStore` ; ce qui meurt avec la fenêtre vit ici.
 //
 
+import AppKit
 import Combine
 import Foundation
 
@@ -37,6 +38,41 @@ final class AppState: ObservableObject {
         store.objectWillChange
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        observeSystemSleep()
+    }
+
+    // MARK: - Veille et réveil (§8)
+
+    /// La SPEC cite `NSWorkspace.didSleepNotification`, qui n'existe pas :
+    /// AppKit expose `willSleepNotification` avant l'endormissement et
+    /// `didWakeNotification` au retour. C'est ce couple qu'on écoute.
+    private func observeSystemSleep() {
+        let center = NSWorkspace.shared.notificationCenter
+
+        center.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.systemWillSleep() }
+        }
+
+        center.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.reconnectAll() }
+        }
+    }
+
+    /// On marque, on ne tue rien : avec mosh, la session traverse la veille
+    /// sans qu'on ait à toucher à quoi que ce soit.
+    func systemWillSleep() {
+        tabs.forEach { $0.systemWillSleep() }
+    }
+
+    /// Au réveil, chaque onglet regarde si son process a survécu. S'il est
+    /// vivant, rien à faire ; sinon il relance exactement la même commande.
+    func reconnectAll() {
+        tabs.forEach { $0.systemDidWake() }
     }
 
     var selectedTab: TerminalSession? {
