@@ -1,0 +1,20 @@
+# XcodeGen : le projet est régénéré, jamais versionné (SPEC §2)
+*.xcodeproj
+*.xcworkspace
+
+# Info.plist généré par XcodeGen
+/Generated/
+
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store

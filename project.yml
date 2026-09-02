@@ -1,0 +1,90 @@
+name: Latch
+
+options:
+  bundleIdPrefix: app.latch
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+  generateEmptyDirectories: false
+
+packages:
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    from: 1.20.0
+
+settings:
+  base:
+    # Mode langage Swift 5 volontairement : la couche PTY manipule forkpty et
+    # DispatchSource, que la concurrence stricte de Swift 6 rejette sans un
+    # échafaudage disproportionné pour la v0.1. À resserrer plus tard.
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CLANG_ENABLE_OBJC_ARC: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
+
+targets:
+  Latch:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/Latch
+    dependencies:
+      - package: SwiftTerm
+        product: SwiftTerm
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleName: Latch
+        CFBundleDisplayName: Latch
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundlePackageType: APPL
+        # Sans cette clé, LaunchServices démarre bien le process mais AppKit
+        # n'installe pas la classe principale : l'app tourne sans fenêtre ni
+        # barre de menus. Lancée directement depuis un terminal, elle marche —
+        # d'où un symptôme qui ne se voit qu'au double-clic.
+        NSPrincipalClass: NSApplication
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: "MIT — Billy Girboux"
+        # Pas d'agent : Latch a une fenêtre principale.
+        LSUIElement: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.latch.Latch
+        # Latch lance ssh/mosh et lit ~/.ssh/config : le bac à sable est
+        # incompatible avec l'objectif. Signature locale pour le développement.
+        ENABLE_APP_SANDBOX: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        COMBINE_HIDPI_IMAGES: YES
+        ENABLE_PREVIEWS: YES
+
+  LatchTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/LatchTests
+    dependencies:
+      - target: Latch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.latch.LatchTests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Latch:
+    build:
+      targets:
+        Latch: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: false
+      targets:
+        - LatchTests
