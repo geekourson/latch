@@ -544,6 +544,11 @@ déjà utilisé ne produisait rien.
 Dans la barre latérale, une fenêtre se renomme, se ferme et se double sur place :
 tmux est la source de vérité, l'app n'en est que la télécommande.
 
+Le chemin qui rend la section utile est l'inverse de celui qu'on imagine : on
+crée la fenêtre quand on en a besoin — depuis la session, ou avec `Ctrl-b c` —
+puis « Ajouter au raccourci » la fait revenir aux prochaines connexions. On
+déclare ce qu'on a trouvé utile, au lieu de deviner à l'avance.
+
 ## 11. Sécurité
 
 - Authentification par clé uniquement. Le fichier de config ne contient jamais

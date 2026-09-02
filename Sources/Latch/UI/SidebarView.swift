@@ -216,6 +216,15 @@ private struct ShortcutRow: View {
         .buttonStyle(.plain)
         .help(shortcut.name)
         .contextMenu {
+            if isOpen {
+                Button("Nouvelle fenêtre") {
+                    app.newWindow(
+                        inSession: shortcut.connection.tmuxSession,
+                        on: shortcut.connection.host
+                    )
+                }
+                Divider()
+            }
             Button("Modifier…") { app.editedShortcut = shortcut }
             Button("Supprimer", role: .destructive) {
                 app.store.remove(shortcutID: shortcut.id)
@@ -278,6 +287,9 @@ private struct WindowRow: View {
                 isRenaming = true
             }
             Button("Nouvelle fenêtre ici") { app.newWindow(inSession: window.session, on: host) }
+            if app.shortcut(forSession: window.session, on: host) != nil {
+                Button("Ajouter au raccourci…") { app.rememberWindow(window, on: host) }
+            }
             Divider()
             Button("Fermer la fenêtre…", role: .destructive) { confirmsClosing = true }
         }

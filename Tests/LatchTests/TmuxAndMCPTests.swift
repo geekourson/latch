@@ -695,3 +695,87 @@ final class WindowReconciliationTests: XCTestCase {
         XCTAssertEqual(ShellQuoting.quoted(window.target), "'mes notes:2'")
     }
 }
+
+// MARK: - Reprendre une fenêtre créée à la main
+
+@MainActor
+final class RememberWindowTests: XCTestCase {
+
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latch-remember-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private func makeState() -> AppState {
+        let state = AppState(
+            store: SessionStore(
+                fileURL: directory.appendingPathComponent("shortcuts.json"),
+                seedFromSSHConfig: false
+            )
+        )
+        state.store.add(
+            Shortcut(
+                name: "API",
+                connection: Connection(transport: .mosh, host: "billy", tmuxSession: "api")
+            )
+        )
+        return state
+    }
+
+    private func window(name: String, command: String?) -> LiveWindow {
+        LiveWindow(session: "api", index: 1, name: name, isActive: false, currentCommand: command)
+    }
+
+    /// Ce qui tourne dans la fenêtre devient la commande à rejouer.
+    func testTheRunningCommandIsCarriedOver() {
+        let state = makeState()
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+
+        let windows = try? XCTUnwrap(state.editedShortcut?.windows)
+        XCTAssertEqual(windows?.map(\.name), ["logs"])
+        XCTAssertEqual(windows?.first?.command, "journalctl")
+    }
+
+    /// Un shell nu n'est pas une commande à rejouer : le champ reste vide
+    /// plutôt que d'inscrire « bash », que l'utilisateur devrait effacer.
+    func testAPlainShellIsNotRecordedAsACommand() {
+        let state = makeState()
+        state.rememberWindow(window(name: "scratch", command: "bash"), on: "billy")
+        XCTAssertEqual(state.editedShortcut?.windows.first?.command, "")
+    }
+
+    /// Rien n'est enregistré tant que le builder n'est pas validé : la fenêtre
+    /// est proposée, pas imposée.
+    func testNothingIsSavedUntilTheBuilderIsConfirmed() {
+        let state = makeState()
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        XCTAssertTrue(state.store.shortcuts.first?.windows.isEmpty ?? false)
+    }
+
+    /// Reprendre deux fois la même fenêtre ne la double pas.
+    func testAWindowAlreadyDeclaredIsNotAddedTwice() {
+        let state = makeState()
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        state.save(try! XCTUnwrap(state.editedShortcut))
+
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        XCTAssertEqual(state.editedShortcut?.windows.count, 1)
+    }
+
+    /// Une session sans raccourci n'a rien à quoi s'ajouter.
+    func testASessionWithoutAShortcutOffersNothing() {
+        let state = makeState()
+        XCTAssertNil(state.shortcut(forSession: "gribouille", on: "billy"))
+        state.rememberWindow(
+            LiveWindow(session: "gribouille", index: 0, name: "x", isActive: false), on: "billy"
+        )
+        XCTAssertNil(state.editedShortcut)
+    }
+}

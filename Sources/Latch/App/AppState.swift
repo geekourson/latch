@@ -305,6 +305,38 @@ final class AppState: ObservableObject {
         inspectors[host]?.renameWindow(window, to: trimmed)
     }
 
+    /// Reprend une fenêtre créée à la main et l'ajoute au raccourci, pour
+    /// qu'elle revienne aux prochaines connexions.
+    ///
+    /// Ouvre le builder plutôt que d'enregistrer directement : ce qui tourne
+    /// dans le panneau est souvent un simple `bash`, et c'est à l'utilisateur
+    /// de dire quelle commande la fenêtre doit relancer.
+    func rememberWindow(_ window: LiveWindow, on host: String) {
+        guard var shortcut = store.shortcuts.first(where: {
+            $0.connection.host == host && $0.connection.tmuxSession == window.session
+        }) else { return }
+
+        guard !shortcut.windows.contains(where: { $0.name == window.name }) else {
+            editedShortcut = shortcut
+            return
+        }
+
+        // Un shell nu n'est pas une commande à rejouer : on laisse le champ
+        // vide plutôt que d'inscrire « bash ».
+        let shells = ["bash", "zsh", "sh", "fish", "-bash", "-zsh"]
+        let command = shells.contains(window.currentCommand ?? "") ? "" : (window.currentCommand ?? "")
+
+        shortcut.windows.append(TmuxWindow(name: window.name, command: command))
+        editedShortcut = shortcut
+    }
+
+    /// Le raccourci qui porte cette session, s'il y en a un.
+    func shortcut(forSession session: String, on host: String) -> Shortcut? {
+        store.shortcuts.first {
+            $0.connection.host == host && $0.connection.tmuxSession == session
+        }
+    }
+
     func newWindow(inSession session: String, on host: String) {
         inspectors[host]?.newWindow(inSession: session)
     }
