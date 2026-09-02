@@ -57,6 +57,26 @@ session distante, et la **latence** — le temps d'ouverture d'une connexion TCP
 vers le port ssh de l'hôte. Ce qu'on ne sait pas ne s'affiche pas : un vide
 vaut mieux qu'un chiffre inventé.
 
+### Les pastilles se lisent, elles ne se devinent pas
+
+Six couleurs, pas une de plus, et la même grammaire partout — barre latérale,
+onglets, barre d'état. La légende est dans **Réglages → Repères**, pour ne pas
+avoir à revenir ici.
+
+| | | |
+|---|---|---|
+| ● | **sauge** | connecté, tout ce qui était demandé est en place |
+| ● | **ardoise** | en cours : connexion, ou reconnexion après une veille |
+| ● | **ambre** | dégradé — ça marche, mais mosh ou tmux manque |
+| ● | **terracotta** | bloqué : une connexion a échoué, ou Claude attend une autorisation |
+| ○ | **terracotta, en anneau** | à toi — Claude a rendu la main et attend ta réponse |
+| ● | **violet** | une session Claude Code travaille |
+| ● | **gris** | inactif : rien ne tourne, et rien n'attend |
+
+Le remplissage porte l'urgence : plein, quelque chose t'attend ; en anneau, tu
+peux prendre ton temps. Et le violet n'appartient qu'à Claude Code — c'est ce
+qui permet de le repérer du coin de l'œil.
+
 ### La session se rattrape toute seule
 
 Le Mac s'endort : rien n'est tué, les sessions sont simplement marquées. Il se

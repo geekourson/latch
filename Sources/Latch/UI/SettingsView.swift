@@ -30,6 +30,10 @@ struct SettingsView: View {
                     .foregroundStyle(Color.latchTextFaint)
             }
 
+            Section("Repères") {
+                LegendView()
+            }
+
             Section("Terminal") {
                 Picker("Police", selection: fontBinding) {
                     Text("Automatique").tag("")

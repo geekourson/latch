@@ -243,14 +243,7 @@ private struct SessionStatus: View {
         }
     }
 
-    private var color: Color {
-        switch session.connection {
-        case .connected: return .latchSuccess
-        case .degraded, .failed: return .latchAccent
-        case .connecting, .reconnecting: return .latchClaude
-        case .idle: return .latchTextFaint
-        }
-    }
+    private var color: Color { session.connection.dotColor }
 
     private var label: String {
         if case .idle = session.connection, let code = session.lastExitCode {

@@ -9,26 +9,44 @@
 
 import SwiftUI
 
+extension ConnectionState {
+    /// La couleur de la pastille d'un onglet. Elle vit ici, à côté de celle de
+    /// Claude et de la légende qui les explique toutes les deux.
+    var dotColor: Color {
+        switch self {
+        case .connected: return .latchSuccess
+        case .degraded: return .latchAccent
+        // Un échec attend une décision, comme Claude quand il bloque.
+        case .failed: return .latchAttention
+        case .connecting, .reconnecting: return .latchPending
+        case .idle: return .latchTextFaint
+        }
+    }
+}
+
 struct ClaudeDot: View {
     let activity: ClaudeActivity
     var size: CGFloat = 5
 
     var body: some View {
-        Circle()
-            .fill(ClaudeDot.color(for: activity))
-            .frame(width: size, height: size)
-            .help(ClaudeDot.wording(for: activity))
+        Group {
+            if activity.attention == .reply {
+                // Un anneau : il t'attend, mais rien n'est suspendu.
+                Circle()
+                    .strokeBorder(ClaudeDot.color(for: activity), lineWidth: 1.5)
+            } else {
+                Circle().fill(ClaudeDot.color(for: activity))
+            }
+        }
+        .frame(width: size, height: size)
+        .help(ClaudeDot.wording(for: activity))
     }
 
-    /// L'autorisation bloque le travail : elle prend la couleur d'alerte. Une
-    /// réponse attendue se distingue quand même de « ça tourne », sinon on ne
-    /// sait jamais quelle session mérite le regard.
+    /// Une seule couleur pour « il t'attend » : ajouter une teinte de plus
+    /// obligerait à retenir la palette au lieu de la lire. C'est le
+    /// remplissage qui dit si quelque chose est suspendu.
     static func color(for activity: ClaudeActivity) -> Color {
-        switch activity.attention {
-        case .permission: return .latchAttention
-        case .reply: return .latchAccent
-        case .none: return .latchClaude
-        }
+        activity.needsAttention ? .latchAttention : .latchClaude
     }
 
     static func wording(for activity: ClaudeActivity) -> String {

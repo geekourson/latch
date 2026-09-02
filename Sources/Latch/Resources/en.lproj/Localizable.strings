@@ -214,3 +214,20 @@
 "Claude attend" = "needs you";
 "à toi" = "your turn";
 "Claude Code" = "Claude Code";
+
+/* --- Légende des pastilles --- */
+"Repères" = "Legend";
+"Connecté" = "Connected";
+"Tout ce qui était demandé est en place." = "Everything that was asked for is in place.";
+"En cours" = "In progress";
+"Connexion, ou reconnexion après une veille." = "Connecting, or reconnecting after a sleep.";
+"Dégradé" = "Degraded";
+"Ça marche, mais moins bien que prévu : mosh ou tmux manque." = "It works, but not as well as intended: mosh or tmux is missing.";
+"Bloqué" = "Blocked";
+"Une connexion a échoué, ou Claude Code attend une autorisation." = "A connection failed, or Claude Code is waiting for permission.";
+"À toi" = "Your turn";
+"Claude Code a rendu la main et attend ta réponse." = "Claude Code has handed back control and is waiting for your reply.";
+"Une session Claude Code travaille." = "A Claude Code session is working.";
+"Inactif" = "Idle";
+"Rien ne tourne, et rien n'attend." = "Nothing is running, and nothing is waiting.";
+"La pastille pleine dit qu'une action est attendue de toi ; l'anneau, que tu peux prendre ton temps." = "A filled dot means something is waiting on you; a ring means you can take your time.";
