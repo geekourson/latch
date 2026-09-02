@@ -1,0 +1,207 @@
+/* Latch — English.
+   French is the development language: the keys are the French texts themselves. */
+
+/* --- Sidebar --- */
+"Nouvelle session" = "New session";
+"Nouvelle session ici" = "New session here";
+"Aucun serveur" = "No servers";
+"Latch lit les alias de ~/.ssh/config au premier lancement." = "Latch reads the aliases in ~/.ssh/config on first launch.";
+"local" = "local";
+"Sonder à nouveau" = "Probe again";
+"Améliorer cet hôte…" = "Upgrade this host…";
+"Retirer ce serveur…" = "Remove this server…";
+"Retirer le serveur seul" = "Remove the server only";
+"Modifier…" = "Edit…";
+"Supprimer" = "Delete";
+"Renommer…" = "Rename…";
+"Nouvelle fenêtre" = "New window";
+"Nouvelle fenêtre ici" = "New window here";
+"Ajouter au raccourci…" = "Add to shortcut…";
+"Fermer la fenêtre…" = "Close window…";
+"Fermer" = "Close";
+"Créer un raccourci ici" = "Create a shortcut here";
+"Fermer la session…" = "Close session…";
+"Fermer la session" = "Close session";
+"Ce qui y tourne sera interrompu." = "Whatever is running there will be interrupted.";
+"nom" = "name";
+
+/* --- Terminal area and status bar --- */
+"Your sessions, still running." = "Your sessions, still running.";
+"aucune session" = "no session";
+"D'accord" = "OK";
+"Réessayer" = "Retry";
+"Latch" = "Latch";
+"Claude Code attend une réponse" = "Claude Code is waiting for an answer";
+"Claude Code a terminé" = "Claude Code has finished";
+
+/* --- Builder --- */
+"Nom" = "Name";
+"Annuler" = "Cancel";
+"Enregistrer" = "Save";
+"Connexion" = "Connection";
+"Transport" = "Transport";
+"À la création" = "On creation";
+"Pré-vol" = "Preflight";
+"Ajouter un pré-vol" = "Add a preflight step";
+"Fenêtres" = "Windows";
+"Ajouter une fenêtre" = "Add a window";
+"À quoi ça sert ?" = "What is this for?";
+"Un nom que tu reconnaîtras, et ce qui tourne dedans." = "A name you will recognise, and what runs in it.";
+"Garder un shell après la sortie de la commande" = "Keep a shell after the command exits";
+"Mode contrôle (tmux -CC)" = "Control mode (tmux -CC)";
+"Incompatible avec mosh — choisis ssh." = "Incompatible with mosh — choose ssh.";
+"Revenir au mode assisté" = "Back to assisted mode";
+"Ouvrir le fichier qui décide où pointe cet alias" = "Open the file that decides where this alias leads";
+"~/.ssh/config" = "~/.ssh/config";
+"billy@192.168.1.37 ou un alias ~/.ssh/config" = "billy@192.168.1.37 or a ~/.ssh/config alias";
+"clés par défaut du Mac" = "the Mac's default keys";
+
+/* Placeholders: worked examples, kept as such. */
+"VPN" = "VPN";
+"scutil --nc status Maison" = "scutil --nc status Home";
+"logs" = "logs";
+"journalctl -fu api" = "journalctl -fu api";
+"api" = "api";
+"~/api" = "~/api";
+"npm run dev" = "npm run dev";
+"bastion" = "bastion";
+"22" = "22";
+"--model opus --permission-mode acceptEdits" = "--model opus --permission-mode acceptEdits";
+"tmux" = "tmux";
+
+/* --- Settings --- */
+"Langue" = "Language";
+"Interface" = "Interface";
+"Le changement s'applique tout de suite." = "The change takes effect immediately.";
+"Terminal" = "Terminal";
+"Police" = "Font";
+"Automatique" = "Automatic";
+"Thème" = "Theme";
+"Palette" = "Palette";
+"Braise (intégré)" = "Ember (built in)";
+"Importer un thème…" = "Import a theme…";
+"Retirer" = "Remove";
+"Ligatures" = "Ligatures";
+"latch on to billy" = "latch on to billy";
+
+/* --- Upgrade panel (§6) --- */
+"Diagnostic" = "Diagnostic";
+"Cet hôte n'a pas encore été sondé." = "This host has not been probed yet.";
+"Distribution inconnue" = "Unknown distribution";
+"Documentation d'installation" = "Installation documentation";
+"Ta commande d'installation…" = "Your install command…";
+"Pare-feu — optionnel" = "Firewall — optional";
+"mosh a besoin des ports UDP 60000 à 61000." = "mosh needs UDP ports 60000 to 61000.";
+"Claude Code" = "Claude Code";
+"Installés, mais hors du PATH" = "Installed, but off the PATH";
+"Sur ce Mac" = "On this Mac";
+"brew.sh" = "brew.sh";
+"Copier" = "Copy";
+"Copier la commande" = "Copy the command";
+"Exécuter dans un panneau" = "Run in a pane";
+"Installer" = "Install";
+"Ne plus proposer pour cet hôte" = "Stop offering this for this host";
+"Améliorer…" = "Upgrade…";
+
+/* --- Hooks (§10) --- */
+"Hooks Latch" = "Latch hooks";
+"en place" = "in place";
+"Voir le script installé sur le serveur" = "See the script installed on the server";
+"Piloter Latch depuis Claude Code" = "Drive Latch from Claude Code";
+
+/* --- Authentication (§11) --- */
+"Authentification" = "Authentication";
+"par clé" = "by key";
+"mot de passe requis" = "password required";
+"Configurer une clé…" = "Set up a key…";
+"Mot de passe" = "Password";
+"Oublier" = "Forget";
+
+/* --- Paragraphs (written as concatenations in the source) --- */
+"Formats acceptés : .itermcolors (iTerm2) et les schémas base16 en .yaml." = "Accepted formats: .itermcolors (iTerm2) and base16 schemes in .yaml.";
+"SwiftTerm dessine glyphe par glyphe sur une grille de cellules et n'expose aucun réglage de ligatures : il n'y a rien à activer ici tant que l'émulateur ne le permet pas." = "SwiftTerm draws glyph by glyph on a cell grid and exposes no ligature setting: there is nothing to switch on here until the emulator allows it.";
+"Claude Code n'est dans aucun gestionnaire de paquets. Son installeur s'installe dans ton dossier personnel et refuse de tourner sous sudo." = "Claude Code is in no package manager. Its installer puts it in your home directory and refuses to run under sudo.";
+"Latch les appelle par leur chemin absolu, donc tes sessions fonctionnent. Mais un shell non interactif ne les trouve pas : déplace le PATH de ~/.bashrc vers ~/.profile ou ~/.zshenv pour que tout le reste les voie aussi." = "Latch calls them by absolute path, so your sessions work. But a non-interactive shell cannot find them: move the PATH out of ~/.bashrc and into ~/.profile or ~/.zshenv so everything else sees them too.";
+"Ils font remonter l'activité de Claude Code : l'indicateur, le fichier en cours, et une notification quand une permission est attendue." = "They report Claude Code's activity: the indicator, the file being touched, and a notification when a permission is awaited.";
+"Les hooks existants de ~/.claude/settings.json sont conservés, et une copie est mise de côté avant modification." = "Hooks already in ~/.claude/settings.json are kept, and a copy is set aside before anything is changed.";
+"Latch écrira ~/.latch/hook.sh et ajoutera ses entrées à ~/.claude/settings.json, dont une copie sera mise de côté. Rien d'autre n'est touché, et aucun sudo n'est demandé." = "Latch will write ~/.latch/hook.sh and add its entries to ~/.claude/settings.json, of which a copy will be set aside. Nothing else is touched, and no sudo is asked for.";
+"Le jeton est tiré à chaque lancement de Latch : relancer l'app invalide l'accès précédent, et cette commande est à rejouer." = "The token is drawn each time Latch starts: restarting the app invalidates the previous access, and this command has to be run again.";
+
+/* Paragraphs carrying a value */
+"%@. Tout ce qui y tourne sera interrompu, et ce qui n'a pas été enregistré sera perdu." = "%@. Whatever is running there will be interrupted, and anything unsaved will be lost.";
+"Une clé existe déjà (%@) : elle sera réutilisée, jamais écrasée." = "A key already exists (%@): it will be reused, never overwritten.";
+"À lancer une fois sur %@, pendant qu'une session Latch y est ouverte — c'est elle qui porte le tunnel. Claude Code pourra alors ouvrir un onglet, lancer une commande ou afficher un fichier." = "Run once on %@, while a Latch session is open there — that session carries the tunnel. Claude Code can then open a tab, run a command or show a file.";
+
+/* --- Connection state --- */
+"en attente" = "waiting";
+"connexion…" = "connecting…";
+"latched on" = "latched on";
+"reconnexion…" = "reconnecting…";
+"reconnexion… (%d)" = "reconnecting… (%d)";
+"latched on · dégradé" = "latched on · degraded";
+"échec" = "failed";
+"terminé" = "finished";
+
+/* --- Transports and initial commands --- */
+"mosh" = "mosh";
+"ssh" = "ssh";
+"ssh via rebond" = "ssh through a jump host";
+"shell seul" = "shell only";
+"commande personnalisée…" = "custom command…";
+
+/* --- Degradation cascade (§6) --- */
+"Tout est en place." = "Everything is in place.";
+"Sans mosh, la session se fige après une mise en veille et doit être relancée à la main." = "Without mosh, the session freezes after a sleep and has to be restarted by hand.";
+"Sans tmux, la session ne survit pas à la fermeture de l'onglet : le travail en cours est perdu." = "Without tmux, the session does not survive closing the tab: work in progress is lost.";
+"Connecté en ssh — mosh n'est pas installé sur cet hôte" = "Connected over ssh — mosh is not installed on this host";
+"Shell nu — tmux n'est pas installé sur cet hôte" = "Bare shell — tmux is not installed on this host";
+
+/* --- Diagnostic lines --- */
+"%@ absent" = "%@ missing";
+"%@ hors PATH" = "%@ off the PATH";
+
+/* --- Session ages --- */
+"à l'instant" = "just now";
+"maintenant" = "now";
+"il y a %d min" = "%d min ago";
+"il y a %d h" = "%d h ago";
+"il y a %d j" = "%d d ago";
+"%d min" = "%d min";
+"%d h" = "%d h";
+"%d j" = "%d d";
+"1 fenêtre" = "1 window";
+"%d fenêtres" = "%d windows";
+
+/* --- Long messages built in Swift --- */
+"Homebrew n'est pas installé sur ce Mac : la commande ci-dessus n'aura rien pour s'exécuter. Son propre installeur est sur brew.sh." = "Homebrew is not installed on this Mac: the command above will have nothing to run it. Its own installer is at brew.sh.";
+"tmux n'est pas installé sur ce Mac : la session locale n'est qu'un shell, et ne survivra pas à la fermeture de l'onglet. « brew install tmux » y remédie." = "tmux is not installed on this Mac: the local session is only a shell, and will not survive closing the tab. “brew install tmux” fixes that.";
+"mosh n'est pas installé sur ce Mac. Les binaires publiés de Latch embarquent mosh-client ; pour une compilation locale, installe-le avec « brew install mosh », ou choisis le transport ssh." = "mosh is not installed on this Mac. Published Latch binaries bundle mosh-client; for a local build, install it with “brew install mosh”, or choose the ssh transport.";
+"ssh-copy-id demandera le mot de passe du compte distant. Il est saisi dans le terminal, par toi : Latch ne le lit pas et ne le garde pas." = "ssh-copy-id will ask for the remote account's password. You type it in the terminal: Latch neither reads it nor keeps it.";
+"Pour désinstaller : supprime ~/.latch/hook.sh et les entrées correspondantes dans ~/.claude/settings.json. Latch en garde une copie dans ~/.claude/settings.json.latch-backup." = "To uninstall: delete ~/.latch/hook.sh and the matching entries in ~/.claude/settings.json. Latch keeps a copy at ~/.claude/settings.json.latch-backup.";
+"Si ces outils fonctionnent quand tu te connectes à la main, c'est que le PATH est défini dans ~/.bashrc, que les shells non interactifs ne lisent pas. Déplace-le dans ~/.profile ou ~/.zshenv." = "If these tools work when you connect by hand, the PATH is set in ~/.bashrc, which non-interactive shells do not read. Move it to ~/.profile or ~/.zshenv.";
+
+/* --- Confirmations (clés interpolées par SwiftUI) --- */
+"Retirer « %@ » de la barre latérale ?" = "Remove “%@” from the sidebar?";
+"Fermer la fenêtre « %@ » ?" = "Close the window “%@”?";
+"Fermer la session « %@ » ?" = "Close the session “%@”?";
+"Rien n'est touché sur l'hôte : les sessions tmux, les clés et les hooks restent en place." = "Nothing is touched on the host: the tmux sessions, the keys and the hooks all stay in place.";
+"Ses %d session(s) sans raccourci ne sont pas fermées." = "Its %d session(s) without a shortcut are not closed.";
+"Ses %d raccourci(s) peuvent être gardés ou retirés avec lui." = "Its %d shortcut(s) can be kept or removed along with it.";
+"Un serveur retiré revient dès qu'un raccourci le désigne à nouveau." = "A removed server comes back as soon as a shortcut points at it again.";
+
+/* --- Fin d'une session --- */
+"terminé (%d)" = "finished (%d)";
+
+/* --- Reconnexion abandonnée --- */
+"Trois tentatives de reconnexion ont échoué." = "Three reconnection attempts failed.";
+"ssh a rendu 255 : hôte injoignable ou authentification refusée. Latch ne réessaiera pas tout seul." = "ssh returned 255: host unreachable or authentication refused. Latch will not retry on its own.";
+"Latch ne réessaiera pas tout seul." = "Latch will not retry on its own.";
+
+/* --- Explications des sections facultatives du builder --- */
+"Des commandes lancées **sur le Mac**, avant de se connecter : monter un VPN, démarrer un tunnel, réveiller une machine. Une étape fatale qui échoue annule la connexion ; les autres avertissent et laissent passer." = "Commands run **on the Mac**, before connecting: bringing up a VPN, starting a tunnel, waking a machine. A fatal step that fails cancels the connection; the others warn and let it through.";
+"Des onglets **à l'intérieur** de la session distante : ton éditeur dans l'une, les journaux qui défilent dans une autre. Elles vivent sur le serveur, survivent à la déconnexion, et se choisissent depuis la barre latérale.\n\nÀ chaque connexion, celles qui manquent sont créées ; les autres sont laissées telles quelles, et aucune n'est jamais fermée. La plupart des sessions n'en ont pas besoin — tmux sait très bien en ouvrir à la main." = "Tabs **inside** the remote session: your editor in one, logs scrolling in another. They live on the server, survive a disconnection, and are picked from the sidebar.\n\nOn every connection, the missing ones are created; the others are left as they are, and none is ever closed. Most sessions do not need any — tmux is perfectly good at opening them by hand.";
+
+/* --- Repli mot de passe --- */
+"Un mot de passe est enregistré dans le trousseau pour cet hôte." = "A password is stored in the keychain for this host.";
+"Si cet hôte n'accepte décidément que les mots de passe, Latch peut en garder un dans le trousseau du système." = "If this host really will only take passwords, Latch can keep one in the system keychain.";
+"Installer les hooks sur %@ ?" = "Install the hooks on %@?";

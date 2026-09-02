@@ -81,15 +81,19 @@ private struct ServerSection: View {
     /// latérale qui disparaît, et rien d'autre — les orphelines n'ont donc pas
     /// à être rangées avant.
     private var removalExplanation: String {
-        var parts = ["Rien n'est touché sur l'hôte : les sessions tmux, les clés et les hooks restent en place."]
+        var parts = [localized(
+            "Rien n'est touché sur l'hôte : les sessions tmux, les clés et les hooks restent en place.")]
         let orphans = app.orphanSessions(on: server.sshAlias).count
         if orphans > 0 {
-            parts.append("Ses \(orphans) session(s) sans raccourci ne sont pas fermées.")
+            parts.append(String(
+                format: localized("Ses %d session(s) sans raccourci ne sont pas fermées."), orphans))
         }
         if shortcutCount > 0 {
-            parts.append("Ses \(shortcutCount) raccourci(s) peuvent être gardés ou retirés avec lui.")
+            parts.append(String(
+                format: localized("Ses %d raccourci(s) peuvent être gardés ou retirés avec lui."),
+                shortcutCount))
         }
-        parts.append("Un serveur retiré revient dès qu'un raccourci le désigne à nouveau.")
+        parts.append(localized("Un serveur retiré revient dès qu'un raccourci le désigne à nouveau."))
         return parts.joined(separator: " ")
     }
 
@@ -359,8 +363,12 @@ private struct OrphanRow: View {
             }
             Button("Annuler", role: .cancel) {}
         } message: {
-            Text("\(session.summary). Tout ce qui y tourne sera interrompu, "
-                + "et ce qui n'a pas été enregistré sera perdu.")
+            Text(
+                String(
+                    format: localized("%@. Tout ce qui y tourne sera interrompu, et ce qui n'a pas été enregistré sera perdu."),
+                    session.summary
+                )
+            )
         }
     }
 }

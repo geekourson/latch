@@ -61,6 +61,9 @@ final class AppState: ObservableObject {
             .sink { [weak self] in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
+        // Avant toute vue : les chaînes sont résolues au premier affichage.
+        Localization.apply(store.preferences.language)
+
         observeSystemSleep()
 
         mcp.host = self

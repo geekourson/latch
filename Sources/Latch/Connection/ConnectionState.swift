@@ -36,13 +36,15 @@ enum ConnectionState: Equatable {
 
     var label: String {
         switch self {
-        case .idle: return "en attente"
-        case .connecting: return "connexion…"
-        case .connected: return "latched on"
+        case .idle: return localized("en attente")
+        case .connecting: return localized("connexion…")
+        case .connected: return localized("latched on")
         case .reconnecting(let attempt):
-            return attempt <= 1 ? "reconnexion…" : "reconnexion… (\(attempt))"
-        case .degraded: return "latched on · dégradé"
-        case .failed: return "échec"
+            return attempt <= 1
+                ? localized("reconnexion…")
+                : String(format: localized("reconnexion… (%d)"), attempt)
+        case .degraded: return localized("latched on · dégradé")
+        case .failed: return localized("échec")
         }
     }
 }

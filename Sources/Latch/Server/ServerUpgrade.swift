@@ -29,21 +29,21 @@ enum Degradation: Equatable {
     var consequence: String {
         switch self {
         case .none:
-            return "Tout est en place."
+            return localized("Tout est en place.")
         case .moshMissing:
-            return "Sans mosh, la session se fige après une mise en veille "
-                + "et doit être relancée à la main."
+            return localized("Sans mosh, la session se fige après une mise en veille "
+                + "et doit être relancée à la main.")
         case .tmuxMissing:
-            return "Sans tmux, la session ne survit pas à la fermeture de "
-                + "l'onglet : le travail en cours est perdu."
+            return localized("Sans tmux, la session ne survit pas à la fermeture de "
+                + "l'onglet : le travail en cours est perdu.")
         }
     }
 
     var bannerTitle: String {
         switch self {
-        case .none: return ""
-        case .moshMissing: return "Connecté en ssh — mosh n'est pas installé sur cet hôte"
-        case .tmuxMissing: return "Shell nu — tmux n'est pas installé sur cet hôte"
+        case .none: return localized("")
+        case .moshMissing: return localized("Connecté en ssh — mosh n'est pas installé sur cet hôte")
+        case .tmuxMissing: return localized("Shell nu — tmux n'est pas installé sur cet hôte")
         }
     }
 }
@@ -89,8 +89,8 @@ struct ToolStatus: Identifiable, Equatable {
     var isOffPath: Bool { offPathAt != nil }
 
     var summary: String {
-        guard isPresent else { return "\(name) absent" }
-        if isOffPath { return "\(name) hors PATH" }
+        guard isPresent else { return String(format: localized("%@ absent"), name) }
+        if isOffPath { return String(format: localized("%@ hors PATH"), name) }
         if let version { return "\(name) \(version)" }
         return name
     }
@@ -212,8 +212,9 @@ enum ServerUpgradePlanner {
     /// Le support n°1 attendu (§6) : un outil qui existe en session mais que la
     /// sonde ne voit pas, parce que le `PATH` est défini dans `~/.bashrc`, lu
     /// seulement par les shells interactifs.
-    static let nonInteractivePathHint =
-        "Si ces outils fonctionnent quand tu te connectes à la main, c'est que "
-        + "le PATH est défini dans ~/.bashrc, que les shells non interactifs ne "
-        + "lisent pas. Déplace-le dans ~/.profile ou ~/.zshenv."
+    static let nonInteractivePathHint = localized(
+            "Si ces outils fonctionnent quand tu te connectes à la main, c'est que "
+            + "le PATH est défini dans ~/.bashrc, que les shells non interactifs ne "
+            + "lisent pas. Déplace-le dans ~/.profile ou ~/.zshenv."
+    )
 }

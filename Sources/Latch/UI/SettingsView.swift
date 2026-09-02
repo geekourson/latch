@@ -19,6 +19,17 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Langue") {
+                Picker("Interface", selection: languageBinding) {
+                    ForEach(Language.allCases) { language in
+                        Text(language.label).tag(language)
+                    }
+                }
+                Text("Le changement s'applique tout de suite.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.latchTextFaint)
+            }
+
             Section("Terminal") {
                 Picker("Police", selection: fontBinding) {
                     Text("Automatique").tag("")
@@ -69,7 +80,7 @@ struct SettingsView: View {
                     Spacer()
                 }
 
-                Text("Formats acceptés : .itermcolors (iTerm2) et les schémas "
+                Text.paragraph("Formats acceptés : .itermcolors (iTerm2) et les schémas "
                     + "base16 en .yaml.")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color.latchTextFaint)
@@ -83,7 +94,7 @@ struct SettingsView: View {
             }
 
             Section("Ligatures") {
-                Text("SwiftTerm dessine glyphe par glyphe sur une grille de "
+                Text.paragraph("SwiftTerm dessine glyphe par glyphe sur une grille de "
                     + "cellules et n'expose aucun réglage de ligatures : il n'y "
                     + "a rien à activer ici tant que l'émulateur ne le permet pas.")
                     .font(.system(size: 11))
@@ -96,6 +107,13 @@ struct SettingsView: View {
     }
 
     // MARK: Liaisons
+
+    private var languageBinding: Binding<Language> {
+        Binding(
+            get: { store.preferences.language },
+            set: { store.setLanguage($0) }
+        )
+    }
 
     private var fontBinding: Binding<String> {
         Binding(

@@ -242,6 +242,14 @@ final class SessionStore: ObservableObject {
 
     // MARK: - Thèmes (§9.3)
 
+    /// Change la langue de l'interface et l'applique aussitôt (§9.3 étendu).
+    func setLanguage(_ language: Language) {
+        guard preferences.language != language else { return }
+        preferences.language = language
+        Localization.apply(language)
+        scheduleSave()
+    }
+
     /// Le thème actif, ou la palette « braise » si aucun n'a été choisi.
     var activeTheme: Theme {
         themes.first { $0.id == preferences.themeID } ?? .ember

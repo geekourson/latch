@@ -72,11 +72,11 @@ enum Transport: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .mosh: return "mosh"
-        case .ssh: return "ssh"
-        case .sshJump: return "ssh via rebond"
-        case .eternalTerminal: return "Eternal Terminal"
-        case .local: return "local"
+        case .mosh: return localized("mosh")
+        case .ssh: return localized("ssh")
+        case .sshJump: return localized("ssh via rebond")
+        case .eternalTerminal: return localized("Eternal Terminal")
+        case .local: return localized("local")
         }
     }
 
@@ -93,11 +93,11 @@ enum InitialCommand: Codable, Equatable, Hashable {
 
     var label: String {
         switch self {
-        case .shell: return "shell seul"
+        case .shell: return localized("shell seul")
         case .claude: return "claude"
         case .claudeContinue: return "claude --continue"
         case .claudeResume: return "claude --resume"
-        case .custom: return "commande personnalisée…"
+        case .custom: return localized("commande personnalisée…")
         }
     }
 

@@ -43,10 +43,10 @@ struct LiveSession: Identifiable, Equatable {
     var age: String {
         let seconds = Date().timeIntervalSince(created)
         switch seconds {
-        case ..<90: return "à l'instant"
-        case ..<3600: return "il y a \(Int(seconds / 60)) min"
-        case ..<86400: return "il y a \(Int(seconds / 3600)) h"
-        default: return "il y a \(Int(seconds / 86400)) j"
+        case ..<90: return localized("à l'instant")
+        case ..<3600: return String(format: localized("il y a %d min"), Int(seconds / 60))
+        case ..<86400: return String(format: localized("il y a %d h"), Int(seconds / 3600))
+        default: return String(format: localized("il y a %d j"), Int(seconds / 86400))
         }
     }
 
@@ -55,15 +55,17 @@ struct LiveSession: Identifiable, Equatable {
     var shortAge: String {
         let seconds = Date().timeIntervalSince(created)
         switch seconds {
-        case ..<90: return "maintenant"
-        case ..<3600: return "\(Int(seconds / 60)) min"
-        case ..<86400: return "\(Int(seconds / 3600)) h"
-        default: return "\(Int(seconds / 86400)) j"
+        case ..<90: return localized("maintenant")
+        case ..<3600: return String(format: localized("%d min"), Int(seconds / 60))
+        case ..<86400: return String(format: localized("%d h"), Int(seconds / 3600))
+        default: return String(format: localized("%d j"), Int(seconds / 86400))
         }
     }
 
     var summary: String {
-        let windows = windowCount == 1 ? "1 fenêtre" : "\(windowCount) fenêtres"
+        let windows = windowCount == 1
+            ? localized("1 fenêtre")
+            : String(format: localized("%d fenêtres"), windowCount)
         return "\(windows), \(age)"
     }
 

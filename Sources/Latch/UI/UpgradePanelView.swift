@@ -225,7 +225,7 @@ struct UpgradePanelView: View {
             Label("Claude Code", systemImage: "sparkles")
                 .labelStyle(SectionLabelStyle())
 
-            Text("Claude Code n'est dans aucun gestionnaire de paquets. "
+            Text.paragraph("Claude Code n'est dans aucun gestionnaire de paquets. "
                 + "Son installeur s'installe dans ton dossier personnel et "
                 + "refuse de tourner sous sudo.")
                 .font(.system(size: 11))
@@ -257,7 +257,7 @@ struct UpgradePanelView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Text("Latch les appelle par leur chemin absolu, donc tes "
+                Text.paragraph("Latch les appelle par leur chemin absolu, donc tes "
                     + "sessions fonctionnent. Mais un shell non interactif ne "
                     + "les trouve pas : déplace le PATH de ~/.bashrc vers "
                     + "~/.profile ou ~/.zshenv pour que tout le reste les voie "
@@ -322,8 +322,12 @@ struct UpgradePanelView: View {
                     .font(.system(size: 11))
 
                     if SSHKeySetup.hasKey() {
-                        Text("Une clé existe déjà (\(SSHKeySetup.privateKeyPath)) : elle sera "
-                            + "réutilisée, jamais écrasée.")
+                        Text(
+                            String(
+                                format: localized("Une clé existe déjà (%@) : elle sera réutilisée, jamais écrasée."),
+                                SSHKeySetup.privateKeyPath
+                            )
+                        )
                             .font(.system(size: 10))
                             .foregroundStyle(Color.latchTextFaint)
                             .fixedSize(horizontal: false, vertical: true)
@@ -343,7 +347,7 @@ struct UpgradePanelView: View {
         VStack(alignment: .leading, spacing: 6) {
             Divider().overlay(Color.latchBorder).padding(.vertical, 2)
 
-            Text(hasStoredPassword
+            Text.paragraph(hasStoredPassword
                 ? "Un mot de passe est enregistré dans le trousseau pour cet hôte."
                 : "Si cet hôte n'accepte décidément que les mots de passe, "
                     + "Latch peut en garder un dans le trousseau du système.")
@@ -416,7 +420,7 @@ struct UpgradePanelView: View {
                 }
             }
 
-            Text("Ils font remonter l'activité de Claude Code : l'indicateur, "
+            Text.paragraph("Ils font remonter l'activité de Claude Code : l'indicateur, "
                 + "le fichier en cours, et une notification quand une "
                 + "permission est attendue.")
                 .font(.system(size: 11))
@@ -432,7 +436,7 @@ struct UpgradePanelView: View {
                     .foregroundStyle(Color.latchAccent)
             }
 
-            Text("Les hooks existants de ~/.claude/settings.json sont "
+            Text.paragraph("Les hooks existants de ~/.claude/settings.json sont "
                 + "conservés, et une copie est mise de côté avant modification.")
                 .font(.system(size: 10.5))
                 .foregroundStyle(Color.latchTextFaint)
@@ -467,7 +471,7 @@ struct UpgradePanelView: View {
                 Button("Installer") { installHooks() }
                 Button("Annuler", role: .cancel) {}
             } message: {
-                Text("Latch écrira ~/.latch/hook.sh et ajoutera ses entrées à "
+                Text.paragraph("Latch écrira ~/.latch/hook.sh et ajoutera ses entrées à "
                     + "~/.claude/settings.json, dont une copie sera mise de côté. "
                     + "Rien d'autre n'est touché, et aucun sudo n'est demandé.")
             }
@@ -518,10 +522,12 @@ struct UpgradePanelView: View {
                 Label("Piloter Latch depuis Claude Code", systemImage: "point.3.connected.trianglepath.dotted")
                     .labelStyle(SectionLabelStyle())
 
-                Text("À lancer une fois sur \(target.alias ?? target.name), pendant qu'une "
-                    + "session Latch y est ouverte — c'est elle qui porte le "
-                    + "tunnel. Claude Code pourra alors ouvrir un onglet, "
-                    + "lancer une commande ou afficher un fichier.")
+                Text(
+                    String(
+                        format: localized("À lancer une fois sur %@, pendant qu'une session Latch y est ouverte — c'est elle qui porte le tunnel. Claude Code pourra alors ouvrir un onglet, lancer une commande ou afficher un fichier."),
+                        target.alias ?? target.name
+                    )
+                )
                     .font(.system(size: 11))
                     .foregroundStyle(Color.latchTextDim)
                     .fixedSize(horizontal: false, vertical: true)
@@ -529,7 +535,7 @@ struct UpgradePanelView: View {
                 CommandBox(command: app.mcp.claudeRegistrationCommand)
                 actions(for: app.mcp.claudeRegistrationCommand)
 
-                Text("Le jeton est tiré à chaque lancement de Latch : relancer "
+                Text.paragraph("Le jeton est tiré à chaque lancement de Latch : relancer "
                     + "l'app invalide l'accès précédent, et cette commande est "
                     + "à rejouer.")
                     .font(.system(size: 10))

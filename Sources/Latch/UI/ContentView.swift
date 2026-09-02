@@ -43,6 +43,8 @@ struct ContentView: View {
         }
         .background(Color.latchBackground)
         .background(WindowChrome())
+        // Changer de langue ne notifie aucune vue : on reconstruit l'arbre.
+        .id(app.store.preferences.language)
         .ignoresSafeArea(.container, edges: .top)
         .animation(.easeOut(duration: 0.16), value: app.upgradingTarget)
         .sheet(item: $app.editedShortcut) { shortcut in
@@ -250,7 +252,9 @@ private struct SessionStatus: View {
 
     private var label: String {
         if case .idle = session.connection, let code = session.lastExitCode {
-            return code == 0 ? "terminé" : "terminé (\(code))"
+            return code == 0
+                ? localized("terminé")
+                : String(format: localized("terminé (%d)"), code)
         }
         return session.connection.label
     }

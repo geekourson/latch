@@ -49,12 +49,12 @@ struct ReconnectionPolicy: Equatable {
 
     /// Le message affiché quand on renonce.
     func giveUpReason(lastExitCode: Int32?) -> String {
-        var reason = "Trois tentatives de reconnexion ont échoué."
+        var reason = localized("Trois tentatives de reconnexion ont échoué.")
         if let lastExitCode, lastExitCode == 255 {
-            reason += " ssh a rendu 255 : hôte injoignable ou authentification "
-                + "refusée. Latch ne réessaiera pas tout seul."
+            reason += " " + localized("ssh a rendu 255 : hôte injoignable ou authentification "
+                + "refusée. Latch ne réessaiera pas tout seul.")
         } else {
-            reason += " Latch ne réessaiera pas tout seul."
+            reason += " " + localized("Latch ne réessaiera pas tout seul.")
         }
         return reason
     }

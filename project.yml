@@ -41,6 +41,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundlePackageType: APPL
+        CFBundleDevelopmentRegion: fr
+        CFBundleLocalizations: [fr, en]
         # Sans cette clé, LaunchServices démarre bien le process mais AppKit
         # n'installe pas la classe principale : l'app tourne sans fenêtre ni
         # barre de menus. Lancée directement depuis un terminal, elle marche —

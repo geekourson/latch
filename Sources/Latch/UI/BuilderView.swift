@@ -466,7 +466,7 @@ private struct ResolvedHost: View {
         // une configuration, c'est ce qu'on a écrit. On le dit quand même, avec
         // la clé que ssh choisira — c'est toute la question que pose le champ.
         if hostName == trimmed || "\(user ?? "")@\(hostName)" == trimmed {
-            return description + " · clés par défaut du Mac"
+            return description + " · " + localized("clés par défaut du Mac")
         }
         return description + " · ~/.ssh/config"
     }
@@ -499,11 +499,11 @@ private enum InitialCommandKind: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .shell: return "shell seul"
+        case .shell: return localized("shell seul")
         case .claude: return "claude"
         case .claudeContinue: return "claude --continue"
         case .claudeResume: return "claude --resume"
-        case .custom: return "commande personnalisée…"
+        case .custom: return localized("commande personnalisée…")
         }
     }
 }
@@ -535,12 +535,12 @@ private struct OptionalSectionHeader: View {
                         .foregroundStyle(Color.latchTextFaint)
                 }
                 .buttonStyle(.plain)
-                .help("À quoi ça sert ?")
+                .help(localized("À quoi ça sert ?"))
                 Spacer(minLength: 0)
             }
 
             if isExplaining || isUsed {
-                Text(.init(explanation))
+                Text(.init(localized(explanation)))
                     .font(.system(size: 10))
                     .foregroundStyle(Color.latchTextFaint)
                     .textCase(nil)
@@ -552,7 +552,7 @@ private struct OptionalSectionHeader: View {
 
 private struct SectionTitle: View {
     let title: String
-    init(_ title: String) { self.title = title }
+    init(_ title: String) { self.title = localized(title) }
 
     var body: some View {
         Text(title)

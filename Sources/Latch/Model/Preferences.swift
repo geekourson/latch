@@ -19,4 +19,6 @@ struct Preferences: Codable, Equatable {
     var padding: Double = 20
     /// Thème importé actif. `nil` = la palette « braise » intégrée.
     var themeID: UUID?
+    /// Langue de l'interface. Par défaut celle du système.
+    var language: Language = .system
 }

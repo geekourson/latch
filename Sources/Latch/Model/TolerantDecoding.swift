@@ -175,7 +175,7 @@ extension ProbeResult {
 
 extension Preferences {
     enum CodingKeys: String, CodingKey {
-        case fontName, fontSize, lineSpacing, padding, themeID
+        case fontName, fontSize, lineSpacing, padding, themeID, language
     }
 
     init(from decoder: Decoder) throws {
@@ -185,6 +185,7 @@ extension Preferences {
         lineSpacing = container.value(.lineSpacing, or: 1.25)
         padding = container.value(.padding, or: 20)
         themeID = container.optional(.themeID)
+        language = container.value(.language, or: .system)
     }
 }
 
