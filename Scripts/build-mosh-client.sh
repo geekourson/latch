@@ -77,7 +77,10 @@ fetch "https://github.com/mobile-shell/mosh/releases/download/mosh-${MOSH_VERSIO
 # La source exacte part avec la release : c'est l'obligation GPLv3.
 cp "$WORK_DIR/mosh.tar.gz" "$OUTPUT_DIR/mosh-${MOSH_VERSION}.tar.gz"
 cp "$0" "$OUTPUT_DIR/build-mosh-client.sh"
-shasum -a 256 "$OUTPUT_DIR/mosh-${MOSH_VERSION}.tar.gz" > "$OUTPUT_DIR/SHA256SUMS"
+# Le nom seul, jamais le chemin : une somme de contrôle qui porte
+# « /Users/runner/work/… » n'est vérifiable par personne d'autre que le
+# runner qui l'a écrite. `shasum -c` la lit à côté de l'archive.
+(cd "$OUTPUT_DIR" && shasum -a 256 "mosh-${MOSH_VERSION}.tar.gz" > SHA256SUMS)
 
 JOBS="$(sysctl -n hw.ncpu)"
 HOST_ARCH="$(uname -m)"
