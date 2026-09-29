@@ -54,9 +54,9 @@ enum MoshClient {
     }
 
     /// Ce que l'interface dit quand mosh manque des deux côtés.
-    static let missingLocallyMessage = localized(
+    static var missingLocallyMessage: String { localized(
             "mosh n'est pas installé sur ce Mac. Les binaires publiés de Latch "
             + "embarquent mosh-client ; pour une compilation locale, installe-le "
             + "avec « brew install mosh », ou choisis le transport ssh."
-    )
+    ) }
 }

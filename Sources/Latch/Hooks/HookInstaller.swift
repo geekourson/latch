@@ -190,9 +190,9 @@ enum HookInstaller {
         return text
     }
 
-    static let uninstallHint = localized(
+    static var uninstallHint: String { localized(
             "Pour désinstaller : supprime ~/.latch/hook.sh et les entrées "
             + "correspondantes dans ~/.claude/settings.json. Latch en garde une "
             + "copie dans ~/.claude/settings.json.latch-backup."
-    )
+    ) }
 }

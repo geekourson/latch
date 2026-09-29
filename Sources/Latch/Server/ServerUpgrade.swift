@@ -212,9 +212,9 @@ enum ServerUpgradePlanner {
     /// Le support n°1 attendu (§6) : un outil qui existe en session mais que la
     /// sonde ne voit pas, parce que le `PATH` est défini dans `~/.bashrc`, lu
     /// seulement par les shells interactifs.
-    static let nonInteractivePathHint = localized(
+    static var nonInteractivePathHint: String { localized(
             "Si ces outils fonctionnent quand tu te connectes à la main, c'est que "
             + "le PATH est défini dans ~/.bashrc, que les shells non interactifs ne "
             + "lisent pas. Déplace-le dans ~/.profile ou ~/.zshenv."
-    )
+    ) }
 }

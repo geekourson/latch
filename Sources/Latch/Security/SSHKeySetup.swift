@@ -71,8 +71,8 @@ enum SSHKeySetup {
         return name.hasSuffix(".local") ? String(name.dropLast(6)) : name
     }
 
-    static let explanation = localized(
+    static var explanation: String { localized(
             "ssh-copy-id demandera le mot de passe du compte distant. Il est saisi "
             + "dans le terminal, par toi : Latch ne le lit pas et ne le garde pas."
-    )
+    ) }
 }

@@ -155,6 +155,14 @@ final class DegradationTests: XCTestCase {
 }
 
 final class UpgradePlanTests: XCTestCase {
+    /// Ces tests comparent des textes français. La langue du système de la
+    /// machine qui les exécute ne doit rien y changer : la CI tourne en
+    /// anglais, et sans ça elle voyait passer les traductions.
+    override func setUp() {
+        super.setUp()
+        Localization.apply(.french)
+    }
+
 
     private func probe(
         tmux: Bool = true, mosh: Bool = true, claude: Bool = true, osID: String? = "ubuntu"
@@ -272,6 +280,14 @@ final class UpgradePlanTests: XCTestCase {
 // MARK: - Le piège du §6, constaté sur un vrai serveur
 
 final class OffPathToolTests: XCTestCase {
+    /// Ces tests comparent des textes français. La langue du système de la
+    /// machine qui les exécute ne doit rien y changer : la CI tourne en
+    /// anglais, et sans ça elle voyait passer les traductions.
+    override func setUp() {
+        super.setUp()
+        Localization.apply(.french)
+    }
+
 
     /// La sortie réelle du serveur de référence : `claude` est installé dans
     /// `~/.local/bin`, que seul `~/.bashrc` ajoute au PATH — donc invisible

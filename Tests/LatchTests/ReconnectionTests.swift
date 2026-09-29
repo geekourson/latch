@@ -144,9 +144,15 @@ final class TerminalSessionLifecycleTests: XCTestCase {
         session.systemDidWake()
         await wait(for: { session.connection == .connected }, "la session se relance")
 
-        let runs = (try? String(contentsOf: marker, encoding: .utf8))?
-            .split(separator: "\n").count ?? 0
-        XCTAssertEqual(runs, 2, "la même commande a été relancée une fois")
+        // « Connectée » veut dire que le process est lancé, pas qu'il a déjà
+        // écrit. Sur une machine lente — un runner de CI — la marque arrive
+        // après : c'est elle qu'il faut attendre, pas l'état de la connexion.
+        func runs() -> Int {
+            (try? String(contentsOf: marker, encoding: .utf8))?
+                .split(separator: "\n").count ?? 0
+        }
+        await wait(for: { runs() >= 2 }, "la commande relancée laisse sa marque")
+        XCTAssertEqual(runs(), 2, "la même commande a été relancée une fois, pas deux")
         session.terminate()
     }
 

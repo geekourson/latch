@@ -514,6 +514,14 @@ final class LatencyProbeTests: XCTestCase {
 // MARK: - Sessions sans raccourci
 
 final class LiveSessionTests: XCTestCase {
+    /// Ces tests comparent des textes français. La langue du système de la
+    /// machine qui les exécute ne doit rien y changer : la CI tourne en
+    /// anglais, et sans ça elle voyait passer les traductions.
+    override func setUp() {
+        super.setUp()
+        Localization.apply(.french)
+    }
+
 
     private let separator = "\u{1F}"
 

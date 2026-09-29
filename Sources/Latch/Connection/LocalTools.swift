@@ -102,16 +102,16 @@ enum LocalTools {
     /// Homebrew, qui installe tout le reste sur un Mac.
     static var homebrewPath: String? { path(of: "brew") }
 
-    static let missingHomebrewMessage = localized(
+    static var missingHomebrewMessage: String { localized(
         "Homebrew n'est pas installé sur ce Mac : la commande ci-dessus n'aura "
             + "rien pour s'exécuter. Son propre installeur est sur brew.sh."
-    )
+    ) }
 
     static let homebrewURL = URL(string: "https://brew.sh")!
 
-    static let missingTmuxMessage = localized(
+    static var missingTmuxMessage: String { localized(
             "tmux n'est pas installé sur ce Mac : la session locale n'est qu'un "
             + "shell, et ne survivra pas à la fermeture de l'onglet. "
             + "« brew install tmux » y remédie."
-    )
+    ) }
 }
