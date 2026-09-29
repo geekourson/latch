@@ -17,7 +17,7 @@ final class CommandBuilderTests: XCTestCase {
 
     private func shortcut(
         transport: Transport = .mosh,
-        host: String = "billy",
+        host: String = "alex",
         jumpHost: String? = nil,
         session: String = "api",
         directory: String? = nil,
@@ -48,7 +48,7 @@ final class CommandBuilderTests: XCTestCase {
 
     // MARK: - Les exemples de la SPEC §5
 
-    /// La SPEC écrit `mosh billy -- tmux new -A -s api -c ~/api 'claude; …'`.
+    /// La SPEC écrit `mosh alex -- tmux new -A -s api -c ~/api 'claude; …'`.
     /// Cette forme ne peut pas marcher : mosh exécute la commande distante
     /// **sans shell**, donc personne ne développe `~/api` côté serveur — et le
     /// shell local, lui, le développerait avec le répertoire personnel du Mac.
@@ -59,7 +59,7 @@ final class CommandBuilderTests: XCTestCase {
         )
         XCTAssertEqual(
             command,
-            #"mosh billy -- sh -c "tmux new -A -s api -c ~/api 'claude; exec \$SHELL'""#
+            #"mosh alex -- sh -c "tmux new -A -s api -c ~/api 'claude; exec \$SHELL'""#
         )
     }
 
@@ -69,18 +69,18 @@ final class CommandBuilderTests: XCTestCase {
         )
         XCTAssertEqual(
             command,
-            #"ssh -t billy "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'""#
+            #"ssh -t alex "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'""#
         )
     }
 
     func testSSHThroughAJumpHost() throws {
         let command = try CommandBuilder.build(shortcut(transport: .sshJump, jumpHost: "bastion"))
-        XCTAssertEqual(command, #"ssh -t -J bastion billy "tmux new -A -s api""#)
+        XCTAssertEqual(command, #"ssh -t -J bastion alex "tmux new -A -s api""#)
     }
 
     func testMoshWithBareShellAndNoDirectory() throws {
         let command = try CommandBuilder.build(shortcut(transport: .mosh, session: "dev"))
-        XCTAssertEqual(command, "mosh billy -- tmux new -A -s dev")
+        XCTAssertEqual(command, "mosh alex -- tmux new -A -s dev")
     }
 
     func testLocalSessionWithoutAConnection() throws {
@@ -116,7 +116,7 @@ final class CommandBuilderTests: XCTestCase {
         let command = try CommandBuilder.build(
             shortcut(transport: .ssh, initial: .claude, keepShell: false)
         )
-        XCTAssertEqual(command, #"ssh -t billy "tmux new -A -s api 'claude'""#)
+        XCTAssertEqual(command, #"ssh -t alex "tmux new -A -s api 'claude'""#)
     }
 
     func testExtraArgumentsRideWithTheInitialCommand() throws {
@@ -130,13 +130,13 @@ final class CommandBuilderTests: XCTestCase {
         )
         XCTAssertEqual(
             command,
-            #"ssh -t billy "tmux new -A -s api 'claude --model opus --permission-mode acceptEdits; exec \$SHELL'""#
+            #"ssh -t alex "tmux new -A -s api 'claude --model opus --permission-mode acceptEdits; exec \$SHELL'""#
         )
     }
 
     func testControlModeGoesBeforeTheSubcommand() throws {
         let command = try CommandBuilder.build(shortcut(transport: .ssh, controlMode: true))
-        XCTAssertEqual(command, #"ssh -t billy "tmux -CC new -A -s api""#)
+        XCTAssertEqual(command, #"ssh -t alex "tmux -CC new -A -s api""#)
     }
 
     // MARK: - Fenêtres
@@ -205,7 +205,7 @@ final class CommandBuilderTests: XCTestCase {
                 preflight: [Preflight(label: "VPN", command: "scutil --nc status Home")]
             )
         )
-        XCTAssertEqual(command, #"scutil --nc status Home && ssh -t billy "tmux new -A -s api""#)
+        XCTAssertEqual(command, #"scutil --nc status Home && ssh -t alex "tmux new -A -s api""#)
     }
 
     /// Un pré-vol non fatal avertit et laisse passer. Le vérifier pour de vrai :
@@ -370,7 +370,7 @@ final class CommandBuilderTests: XCTestCase {
         // Ce que ssh reçoit : l'hôte, puis la commande distante, littérale.
         let arguments = try ShellHarness.arguments(of: command)
         XCTAssertEqual(arguments.first, "-t")
-        XCTAssertEqual(arguments[1], "billy")
+        XCTAssertEqual(arguments[1], "alex")
 
         // Et ce que le shell distant en ferait, une fois relancé dessus.
         let remote = try XCTUnwrap(arguments.last)
@@ -393,8 +393,8 @@ final class CommandBuilderTests: XCTestCase {
     }
 
     func testHostWithAnAtSignIsNotQuoted() throws {
-        let command = try CommandBuilder.build(shortcut(transport: .ssh, host: "billy@192.168.1.37"))
-        XCTAssertEqual(command, #"ssh -t billy@192.168.1.37 "tmux new -A -s api""#)
+        let command = try CommandBuilder.build(shortcut(transport: .ssh, host: "alex@192.168.1.10"))
+        XCTAssertEqual(command, #"ssh -t alex@192.168.1.10 "tmux new -A -s api""#)
     }
 }
 
@@ -443,7 +443,7 @@ final class PreviewEditTests: XCTestCase {
     func testValidationMessagesNeverReachTheField() throws {
         let invalid = Shortcut(
             name: "cassé",
-            connection: Connection(transport: .sshJump, host: "billy", tmuxSession: "api")
+            connection: Connection(transport: .sshJump, host: "alex", tmuxSession: "api")
         )
         let issues = CommandBuilder.validate(invalid)
         XCTAssertFalse(issues.isEmpty)

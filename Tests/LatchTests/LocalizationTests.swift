@@ -103,7 +103,7 @@ final class LocalizationTests: XCTestCase {
         let identicalOnPurpose: Set<String> = [
             "Latch", "Claude Code", "latched on", "mosh", "ssh", "tmux", "local",
             "Terminal", "Diagnostic", "Interface", "brew.sh", "~/.ssh/config",
-            "Your sessions, still running.", "latch on to billy",
+            "Your sessions, still running.", "latch on to alex",
         ]
         let keys = ["Nouvelle session", "Enregistrer", "Annuler", "Fermer", "Supprimer",
                     "Fenêtres", "Pré-vol", "Langue", "Police", "Mot de passe"]

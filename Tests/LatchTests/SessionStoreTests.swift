@@ -35,7 +35,7 @@ final class SessionStoreTests: XCTestCase {
             preflight: [Preflight(label: "VPN", command: "vpn up", failureIsFatal: false)],
             connection: Connection(
                 transport: .mosh,
-                host: "billy",
+                host: "alex",
                 tmuxSession: "api",
                 workingDirectory: "~/api",
                 initialCommand: .claudeContinue,
@@ -59,7 +59,7 @@ final class SessionStoreTests: XCTestCase {
 
     func testServerSurvivesARoundTrip() throws {
         let store = makeStore()
-        var server = Server(name: "billy", sshAlias: "billy")
+        var server = Server(name: "alex", sshAlias: "alex")
         server.probe = ProbeResult(
             hasTmux: true, tmuxVersion: "3.2a", hasMoshServer: false, hasClaude: false, osID: "ubuntu"
         )
@@ -123,7 +123,7 @@ final class SessionStoreTests: XCTestCase {
 
     func testShortcutsAreGroupedByServerAlias() {
         let store = makeStore()
-        store.servers = [Server(name: "billy", sshAlias: "billy")]
+        store.servers = [Server(name: "alex", sshAlias: "alex")]
         store.add(sampleShortcut())
 
         var elsewhere = sampleShortcut()
@@ -148,7 +148,7 @@ final class SessionStoreTests: XCTestCase {
     // MARK: - Cache de la sonde
 
     func testProbeExpiresAfterSevenDays() {
-        var server = Server(name: "billy", sshAlias: "billy")
+        var server = Server(name: "alex", sshAlias: "alex")
         XCTAssertTrue(server.probeIsStale, "jamais sondé")
 
         server.probedAt = Date()
@@ -160,7 +160,7 @@ final class SessionStoreTests: XCTestCase {
 
     func testInvalidatingTheProbeClearsTheCache() {
         let store = makeStore()
-        var server = Server(name: "billy", sshAlias: "billy")
+        var server = Server(name: "alex", sshAlias: "alex")
         server.probe = ProbeResult(hasTmux: true)
         server.probedAt = Date()
         store.servers = [server]
@@ -176,14 +176,14 @@ final class SSHConfigTests: XCTestCase {
     func testReadsHostAliasesInOrder() {
         let configuration = """
             # commentaire
-            Host billy
-                HostName 192.168.1.37
-                User billy
+            Host alex
+                HostName 192.168.1.10
+                User alex
 
             Host bastion prod
                 HostName example.net
             """
-        XCTAssertEqual(SSHConfig.hosts(in: configuration), ["billy", "bastion", "prod"])
+        XCTAssertEqual(SSHConfig.hosts(in: configuration), ["alex", "bastion", "prod"])
     }
 
     /// `Host *` est un bloc de réglages par défaut, pas un serveur.
@@ -193,18 +193,18 @@ final class SSHConfigTests: XCTestCase {
                 ServerAliveInterval 60
             Host *.example.net
             Host !interdit
-            Host billy
+            Host alex
             """
-        XCTAssertEqual(SSHConfig.hosts(in: configuration), ["billy"])
+        XCTAssertEqual(SSHConfig.hosts(in: configuration), ["alex"])
     }
 
     func testAcceptsEqualsAndMixedCase() {
-        XCTAssertEqual(SSHConfig.hosts(in: "host=billy"), ["billy"])
-        XCTAssertEqual(SSHConfig.hosts(in: "HOST billy"), ["billy"])
+        XCTAssertEqual(SSHConfig.hosts(in: "host=alex"), ["alex"])
+        XCTAssertEqual(SSHConfig.hosts(in: "HOST alex"), ["alex"])
     }
 
     func testDeduplicates() {
-        XCTAssertEqual(SSHConfig.hosts(in: "Host billy\nHost billy"), ["billy"])
+        XCTAssertEqual(SSHConfig.hosts(in: "Host alex\nHost alex"), ["alex"])
     }
 
     func testEmptyConfigurationYieldsNothing() {
@@ -247,8 +247,8 @@ final class StoreCompatibilityTests: XCTestCase {
               "version": 1,
               "servers": [{
                 "id": "11111111-1111-1111-1111-111111111111",
-                "name": "billy",
-                "sshAlias": "billy",
+                "name": "alex",
+                "sshAlias": "alex",
                 "skipUpgradePrompt": false,
                 "probedAt": 810037617.595638,
                 "probe": {
@@ -262,7 +262,7 @@ final class StoreCompatibilityTests: XCTestCase {
                 "preflight": [],
                 "windows": [],
                 "connection": {
-                  "transport": "mosh", "host": "billy", "tmuxSession": "api",
+                  "transport": "mosh", "host": "alex", "tmuxSession": "api",
                   "initialCommand": {"shell": {}},
                   "keepShellOnExit": true, "controlMode": false
                 }
@@ -272,7 +272,7 @@ final class StoreCompatibilityTests: XCTestCase {
         )
 
         XCTAssertNil(store.lastError, store.lastError ?? "")
-        XCTAssertEqual(store.servers.map(\.name), ["billy"])
+        XCTAssertEqual(store.servers.map(\.name), ["alex"])
         XCTAssertEqual(store.servers.first?.probe?.tmuxVersion, "3.2a")
         XCTAssertEqual(store.servers.first?.probe?.offPathTools, [:])
         XCTAssertEqual(store.shortcuts.map(\.name), ["API · Claude"])
@@ -286,13 +286,13 @@ final class StoreCompatibilityTests: XCTestCase {
         let store = try load(
             """
             {
-              "servers": [{"sshAlias": "billy"}],
-              "shortcuts": [{"connection": {"host": "billy"}}]
+              "servers": [{"sshAlias": "alex"}],
+              "shortcuts": [{"connection": {"host": "alex"}}]
             }
             """
         )
         XCTAssertNil(store.lastError, store.lastError ?? "")
-        XCTAssertEqual(store.servers.first?.name, "billy", "le nom retombe sur l'alias")
+        XCTAssertEqual(store.servers.first?.name, "alex", "le nom retombe sur l'alias")
         XCTAssertEqual(store.shortcuts.first?.connection.tmuxSession, "session")
         XCTAssertEqual(store.shortcuts.first?.connection.transport, .mosh)
         XCTAssertNotNil(store.shortcuts.first?.id, "un identifiant est fabriqué")
@@ -305,7 +305,7 @@ final class StoreCompatibilityTests: XCTestCase {
             """
             {
               "version": 99,
-              "servers": [{"sshAlias": "billy", "quelqueChoseDeFutur": true}],
+              "servers": [{"sshAlias": "alex", "quelqueChoseDeFutur": true}],
               "shortcuts": [],
               "cequonNeConnaitPas": [1, 2, 3]
             }
@@ -324,7 +324,7 @@ final class StoreCompatibilityTests: XCTestCase {
             {
               "shortcuts": [
                 {"name": "orphelin"},
-                {"name": "bon", "connection": {"host": "billy", "tmuxSession": "api"}}
+                {"name": "bon", "connection": {"host": "alex", "tmuxSession": "api"}}
               ]
             }
             """

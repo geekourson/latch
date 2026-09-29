@@ -16,7 +16,7 @@ final class SSHKeySetupTests: XCTestCase {
     /// Écraser une clé existante détruirait l'accès à tous les autres serveurs
     /// de l'utilisateur. La commande doit refuser de le faire.
     func testNeverOverwritesAnExistingKey() {
-        let command = SSHKeySetup.setupCommand(alias: "billy")
+        let command = SSHKeySetup.setupCommand(alias: "alex")
         XCTAssertTrue(command.contains("if [ -f "), command)
         XCTAssertTrue(command.contains("clé existante réutilisée"), command)
         XCTAssertFalse(command.contains("-f -q"), "aucune option d'écrasement silencieux")
@@ -26,17 +26,17 @@ final class SSHKeySetupTests: XCTestCase {
     /// La clé n'est copiée qu'après avoir été créée ou retrouvée : `&&`, pas
     /// `;`. Sinon `ssh-copy-id` partirait avec une clé qui n'existe pas.
     func testCopyOnlyRunsAfterTheKeyIsThere() {
-        XCTAssertTrue(SSHKeySetup.setupCommand(alias: "billy").contains("&& ssh-copy-id"))
+        XCTAssertTrue(SSHKeySetup.setupCommand(alias: "alex").contains("&& ssh-copy-id"))
     }
 
     func testQuotesItsArguments() {
-        let command = SSHKeySetup.setupCommand(alias: "un hôte", comment: "l'ordinateur de billy")
+        let command = SSHKeySetup.setupCommand(alias: "un hôte", comment: "l'ordinateur de alex")
         XCTAssertTrue(command.contains("'un hôte'"), command)
-        XCTAssertTrue(command.contains(#"'l'\''ordinateur de billy'"#), command)
+        XCTAssertTrue(command.contains(#"'l'\''ordinateur de alex'"#), command)
     }
 
     func testUsesEd25519AsTheSpecDoes() {
-        XCTAssertTrue(SSHKeySetup.setupCommand(alias: "billy").contains("ssh-keygen -t ed25519"))
+        XCTAssertTrue(SSHKeySetup.setupCommand(alias: "alex").contains("ssh-keygen -t ed25519"))
         XCTAssertTrue(SSHKeySetup.privateKeyPath.hasSuffix("/.ssh/id_ed25519"))
         XCTAssertEqual(SSHKeySetup.publicKeyPath, SSHKeySetup.privateKeyPath + ".pub")
     }
@@ -46,7 +46,7 @@ final class SSHKeySetupTests: XCTestCase {
         XCTAssertTrue(SSHKeySetup.explanation.contains("ne le lit pas"))
     }
 
-    /// L'alias `billy` du §14 a une clé en place : la détection doit le dire.
+    /// L'alias `alex` du §14 a une clé en place : la détection doit le dire.
     func testDetectsWorkingKeyAuthentication() async throws {
         guard FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.ssh/config") else {
             throw XCTSkip("pas de ~/.ssh/config sur cette machine")
@@ -66,10 +66,10 @@ final class PasswordPromptTests: XCTestCase {
 
     func testRecognisesTheUsualPrompts() {
         for prompt in [
-            "billy@192.168.1.37's password: ",
+            "alex@192.168.1.10's password: ",
             "Password:",
             "Mot de passe : ",
-            "Enter passphrase for key '/Users/billy/.ssh/id_ed25519': ",
+            "Enter passphrase for key '/Users/alex/.ssh/id_ed25519': ",
         ] {
             var detector = detector()
             XCTAssertTrue(
@@ -83,7 +83,7 @@ final class PasswordPromptTests: XCTestCase {
     /// deux fragments.
     func testRecognisesAPromptSplitAcrossReads() {
         var detector = detector()
-        XCTAssertFalse(detector.shouldAnswer(after: "billy@host's pass", elapsed: 1))
+        XCTAssertFalse(detector.shouldAnswer(after: "alex@host's pass", elapsed: 1))
         XCTAssertTrue(detector.shouldAnswer(after: "word: ", elapsed: 1))
     }
 
@@ -92,7 +92,7 @@ final class PasswordPromptTests: XCTestCase {
     func testOrdinaryOutputIsNotAPrompt() {
         var detector = detector()
         XCTAssertFalse(detector.shouldAnswer(after: "password: hunter2 (dans un fichier)\n", elapsed: 1))
-        XCTAssertFalse(detector.shouldAnswer(after: "billy@ia-server:~$ ", elapsed: 1))
+        XCTAssertFalse(detector.shouldAnswer(after: "alex@serveur:~$ ", elapsed: 1))
     }
 
     /// Deux points en fin de ligne ne suffisent pas : encore faut-il qu'on
@@ -158,7 +158,7 @@ final class PasswordPromptTests: XCTestCase {
 final class KeychainTests: XCTestCase {
 
     private let alias = "latch-test-\(UUID().uuidString)"
-    private let account = "billy"
+    private let account = "alex"
 
     override func tearDown() {
         Keychain.remove(alias: alias, account: account)

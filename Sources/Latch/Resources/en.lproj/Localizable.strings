@@ -53,7 +53,7 @@
 "Revenir au mode assisté" = "Back to assisted mode";
 "Ouvrir le fichier qui décide où pointe cet alias" = "Open the file that decides where this alias leads";
 "~/.ssh/config" = "~/.ssh/config";
-"billy@192.168.1.37 ou un alias ~/.ssh/config" = "billy@192.168.1.37 or a ~/.ssh/config alias";
+"alex@192.168.1.10 ou un alias ~/.ssh/config" = "alex@192.168.1.10 or a ~/.ssh/config alias";
 "clés par défaut du Mac" = "the Mac's default keys";
 
 /* Placeholders: worked examples, kept as such. */
@@ -82,7 +82,7 @@
 "Importer un thème…" = "Import a theme…";
 "Retirer" = "Remove";
 "Ligatures" = "Ligatures";
-"latch on to billy" = "latch on to billy";
+"latch on to alex" = "latch on to alex";
 
 /* --- Upgrade panel (§6) --- */
 "Diagnostic" = "Diagnostic";

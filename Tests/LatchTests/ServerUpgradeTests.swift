@@ -27,7 +27,7 @@ final class ServerProbeTests: XCTestCase {
             """
             /usr/bin/tmux
             /usr/bin/mosh-server
-            /home/billy/.local/bin/claude
+            /home/alex/.local/bin/claude
             tmux 3.4
             debian
             """
@@ -64,7 +64,7 @@ final class DegradationTests: XCTestCase {
     private func shortcut(transport: Transport = .mosh) -> Shortcut {
         Shortcut(
             name: "api",
-            connection: Connection(transport: transport, host: "billy", tmuxSession: "api")
+            connection: Connection(transport: transport, host: "alex", tmuxSession: "api")
         )
     }
 
@@ -81,7 +81,7 @@ final class DegradationTests: XCTestCase {
         XCTAssertEqual(degradation, .moshMissing)
 
         let command = try CommandBuilder.build(shortcut(transport: .mosh), degradation: degradation)
-        XCTAssertEqual(command, #"ssh -t billy "tmux new -A -s api""#)
+        XCTAssertEqual(command, #"ssh -t alex "tmux new -A -s api""#)
     }
 
     /// Sans tmux, on ouvre un shell nu — et on prévient que la session ne
@@ -91,7 +91,7 @@ final class DegradationTests: XCTestCase {
         XCTAssertEqual(degradation, .tmuxMissing)
 
         let command = try CommandBuilder.build(shortcut(transport: .mosh), degradation: degradation)
-        XCTAssertEqual(command, "ssh -t billy")
+        XCTAssertEqual(command, "ssh -t alex")
         XCTAssertFalse(command.contains("tmux"))
     }
 
@@ -99,7 +99,7 @@ final class DegradationTests: XCTestCase {
         var jumped = shortcut(transport: .sshJump)
         jumped.connection.jumpHost = "bastion"
         let command = try CommandBuilder.build(jumped, degradation: .tmuxMissing)
-        XCTAssertEqual(command, "ssh -t -J bastion billy")
+        XCTAssertEqual(command, "ssh -t -J bastion alex")
     }
 
     /// Sans sonde, on ne dégrade rien : on n'ampute pas une connexion sur une
@@ -280,14 +280,14 @@ final class OffPathToolTests: XCTestCase {
         /usr/bin/tmux
         tmux 3.2a
         ubuntu
-        LATCH_OFFPATH claude /home/billy/.local/bin/claude
+        LATCH_OFFPATH claude /home/alex/.local/bin/claude
         """
 
     func testAToolFoundOnlyOffPathCountsAsPresent() {
         let result = ServerProbe.parse(realOutput)
         XCTAssertTrue(result.hasClaude, "claude est installé, même si command -v l'ignore")
         XCTAssertTrue(result.isOffPath("claude"))
-        XCTAssertEqual(result.offPathTools["claude"], "/home/billy/.local/bin/claude")
+        XCTAssertEqual(result.offPathTools["claude"], "/home/alex/.local/bin/claude")
         XCTAssertFalse(result.isOffPath("tmux"), "tmux, lui, est bien sur le PATH")
     }
 
@@ -295,7 +295,7 @@ final class OffPathToolTests: XCTestCase {
     func testAnOffPathToolIsNotOfferedForInstallation() {
         let plan = ServerUpgradePlanner.plan(for: ServerProbe.parse(realOutput))
         XCTAssertNil(plan.claudeCommand, "claude est là, on ne propose pas de le réinstaller")
-        XCTAssertEqual(plan.offPathTools["claude"], "/home/billy/.local/bin/claude")
+        XCTAssertEqual(plan.offPathTools["claude"], "/home/alex/.local/bin/claude")
         XCTAssertTrue(plan.diagnostics.contains { $0.name == "claude" && $0.summary == "claude hors PATH" })
     }
 
@@ -304,8 +304,8 @@ final class OffPathToolTests: XCTestCase {
         let result = ServerProbe.parse(
             """
             /usr/bin/tmux
-            /home/billy/.local/bin/claude
-            LATCH_OFFPATH claude /home/billy/.local/bin/claude
+            /home/alex/.local/bin/claude
+            LATCH_OFFPATH claude /home/alex/.local/bin/claude
             """
         )
         XCTAssertTrue(result.hasClaude)
@@ -325,7 +325,7 @@ final class OffPathToolTests: XCTestCase {
         Shortcut(
             name: "api",
             connection: Connection(
-                transport: .ssh, host: "billy", tmuxSession: "api",
+                transport: .ssh, host: "alex", tmuxSession: "api",
                 initialCommand: .claudeContinue, keepShellOnExit: false
             )
         )
@@ -337,9 +337,9 @@ final class OffPathToolTests: XCTestCase {
     func testAnOffPathToolIsCalledByItsAbsolutePath() throws {
         let command = try CommandBuilder.build(
             claudeShortcut(),
-            toolPaths: ["claude": "/home/billy/.local/bin/claude"]
+            toolPaths: ["claude": "/home/alex/.local/bin/claude"]
         )
-        XCTAssertTrue(command.contains("/home/billy/.local/bin/claude --continue"), command)
+        XCTAssertTrue(command.contains("/home/alex/.local/bin/claude --continue"), command)
         XCTAssertFalse(command.contains("'claude --continue'"), command)
     }
 
@@ -364,7 +364,7 @@ final class OffPathToolTests: XCTestCase {
     func testNoToolPathsMeansNoSubstitution() throws {
         XCTAssertEqual(
             try CommandBuilder.build(claudeShortcut()),
-            #"ssh -t billy "tmux new -A -s api 'claude --continue'""#
+            #"ssh -t alex "tmux new -A -s api 'claude --continue'""#
         )
     }
 }
@@ -403,8 +403,8 @@ final class LocalUpgradeTests: XCTestCase {
         XCTAssertFalse(UpgradeTarget.localMac.wantsMosh)
         XCTAssertEqual(UpgradeTarget.localMac.commandLocation, "À exécuter sur ce Mac")
 
-        let server = Server(name: "billy", sshAlias: "billy")
-        XCTAssertEqual(UpgradeTarget.server(server).alias, "billy")
+        let server = Server(name: "alex", sshAlias: "alex")
+        XCTAssertEqual(UpgradeTarget.server(server).alias, "alex")
         XCTAssertTrue(UpgradeTarget.server(server).wantsMosh)
     }
 

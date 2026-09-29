@@ -25,7 +25,7 @@ sans en avoir le jargon.
 | Accroche | « Your sessions, still running. » |
 
 Le verbe maison est *to latch on* : dans l'interface et les messages d'erreur,
-on écrit « latch on to billy », pas « connect to billy ». Rester cohérent —
+on écrit « latch on to alex », pas « connect to alex ». Rester cohérent —
 c'est ce qui donne une identité à un outil en ligne de commande.
 
 Ne pas décliner le nom en sous-produits (`latchd`, `latch-cli`, `LatchKit`)
@@ -192,7 +192,7 @@ Séparés des raccourcis, pour que plusieurs raccourcis partagent un hôte :
 ```swift
 struct Server: Codable, Identifiable {
     var id: UUID
-    var name: String              // "billy"
+    var name: String              // "alex"
     var sshAlias: String          // entrée Host de ~/.ssh/config
     var probe: ProbeResult?       // mis en cache, voir §6
     var probedAt: Date?
@@ -216,16 +216,16 @@ Exemples attendus, à couvrir par des tests :
 # mosh exécute la commande distante SANS shell : personne ne développerait
 # `~/api` côté serveur, et le shell local le développerait avec le répertoire
 # personnel du Mac. D'où le `sh -c`, et seulement quand un chemin l'exige.
-mosh billy -- sh -c "tmux new -A -s api -c ~/api 'claude; exec \$SHELL'"
+mosh alex -- sh -c "tmux new -A -s api -c ~/api 'claude; exec \$SHELL'"
 
 # ssh + reprise de conversation
-ssh -t billy "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
+ssh -t alex "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
 
 # ssh via bastion
-ssh -t -J bastion billy "tmux new -A -s api"
+ssh -t -J bastion alex "tmux new -A -s api"
 
 # shell seul, pas de dossier
-mosh billy -- tmux new -A -s dev
+mosh alex -- tmux new -A -s dev
 
 # local, sans connexion
 tmux new -A -s notes -c ~/notes
@@ -384,7 +384,7 @@ NSWorkspace.shared.notificationCenter.addObserver(
 
 - Barre de titre transparente (`titlebarAppearsTransparent`,
   `titleVisibility = .hidden`), feux de circulation atténués au repos.
-- `~/.ssh/config` n'est **pas** obligatoire : `billy@192.168.1.37` suffit dans le
+- `~/.ssh/config` n'est **pas** obligatoire : `alex@192.168.1.10` suffit dans le
   champ « Hôte », et ssh essaie de lui-même les clés par défaut du Mac. Les
   champs `Port` et `Clé` ne servent qu'aux cas où ces valeurs par défaut ne
   conviennent pas ; laissés vides, la commande reste celle du §5.
@@ -571,7 +571,7 @@ avant que la précédente compile, passe ses tests et soit utilisable.
 ### v0.1 — Ça marche
 
 Une fenêtre, un `TerminalPane`, un `PTYProcess` qui lance une commande codée en
-dur. Critère d'acceptation : `mosh billy -- tmux new -A -s api` s'ouvre,
+dur. Critère d'acceptation : `mosh alex -- tmux new -A -s api` s'ouvre,
 `vim` et `htop` s'affichent correctement, le redimensionnement fonctionne.
 
 ### v0.2 — C'est une app
@@ -628,11 +628,11 @@ terminaux ne se laisse pas sans serrure.
 
 ## 14. Environnement de test
 
-Serveur de référence : `billy@192.168.1.37`, alias ssh `billy`, clé ed25519
+Serveur de référence : `alex@192.168.1.10`, alias ssh `alex`, clé ed25519
 déjà installée, connexion sans mot de passe fonctionnelle.
 
 L'IP est attribuée par DHCP : le README doit recommander une réservation dans le
-routeur, un nom mDNS (`billy.local`), ou Tailscale pour un accès hors du réseau
+routeur, un nom mDNS (`alex.local`), ou Tailscale pour un accès hors du réseau
 local.
 
 ---

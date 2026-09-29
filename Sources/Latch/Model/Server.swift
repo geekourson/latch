@@ -10,7 +10,7 @@ import Foundation
 
 struct Server: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
-    /// « billy »
+    /// « alex »
     var name: String
     /// Entrée `Host` de `~/.ssh/config`.
     var sshAlias: String

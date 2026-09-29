@@ -2,10 +2,11 @@
 //  ClaudeAttentionTests.swift
 //  LatchTests
 //
-//  Les charges utiles de ce fichier sont copiées telles quelles du journal
-//  d'un vrai serveur, `~/.latch/events.jsonl`. C'est là qu'on a découvert le
-//  défaut : Claude Code distingue `permission_prompt` de `idle_prompt`, et
-//  Latch ne reconnaissait que le premier — une question restait donc invisible.
+//  Les charges utiles de ce fichier ont la forme exacte de celles qu'on a
+//  relevées dans `~/.latch/events.jsonl` sur un vrai serveur — seuls les noms
+//  ont été changés. C'est là qu'on a découvert le défaut : Claude Code
+//  distingue `permission_prompt` de `idle_prompt`, et Latch ne reconnaissait
+//  que le premier — une question restait donc invisible.
 //
 
 import XCTest
@@ -18,9 +19,9 @@ final class ClaudeAttentionTests: XCTestCase {
 
     /// « Claude needs your permission » : un outil est suspendu.
     private let permissionLine = """
-        {"session_id":"c51a9d2a-207d-4c10-8953-fcd3998e5b5d",\
-        "cwd":"/home/billy/gribouille-model",\
-        "prompt_id":"f6ccfd02-a954-4d92-aca1-2e30e3f9a1e7",\
+        {"session_id":"00000000-0000-4000-8000-000000000001",\
+        "cwd":"/home/alex/atelier",\
+        "prompt_id":"00000000-0000-4000-8000-0000000000a1",\
         "hook_event_name":"Notification",\
         "message":"Claude needs your permission",\
         "notification_type":"permission_prompt"}
@@ -28,8 +29,8 @@ final class ClaudeAttentionTests: XCTestCase {
 
     /// « Claude is waiting for your input » : une question sans réponse.
     private let idleLine = """
-        {"session_id":"18ccfcf8-dc27-4b12-9d4d-2fc994422e04",\
-        "cwd":"/home/billy/chess-model",\
+        {"session_id":"00000000-0000-4000-8000-000000000002",\
+        "cwd":"/home/alex/atelier",\
         "hook_event_name":"Notification",\
         "message":"Claude is waiting for your input",\
         "notification_type":"idle_prompt"}
@@ -39,7 +40,7 @@ final class ClaudeAttentionTests: XCTestCase {
         let event = try XCTUnwrap(HookEvent.parse(line: permissionLine))
         XCTAssertEqual(event.attention, .permission)
         XCTAssertTrue(event.isAwaitingPermission)
-        XCTAssertEqual(event.cwd, "/home/billy/gribouille-model")
+        XCTAssertEqual(event.cwd, "/home/alex/atelier")
     }
 
     /// Le défaut qu'on corrige : cette ligne ne produisait aucune attente, et
@@ -53,7 +54,7 @@ final class ClaudeAttentionTests: XCTestCase {
     /// Un tour qui se termine rend la main, et c'est le signal le plus rapide :
     /// `idle_prompt` n'arrive qu'après un délai d'inactivité.
     func testAFinishedTurnHandsBackControl() throws {
-        let line = #"{"hook_event_name":"Stop","session_id":"x","cwd":"/home/billy/api"}"#
+        let line = #"{"hook_event_name":"Stop","session_id":"x","cwd":"/home/alex/api"}"#
         let event = try XCTUnwrap(HookEvent.parse(line: line))
         XCTAssertEqual(event.attention, .reply)
     }
@@ -90,10 +91,10 @@ final class ClaudeAttentionTests: XCTestCase {
         activity.apply(try XCTUnwrap(HookEvent.parse(line: idleLine)))
         XCTAssertEqual(activity.attention, .reply)
         XCTAssertTrue(activity.needsAttention)
-        XCTAssertEqual(activity.directory, "/home/billy/chess-model")
+        XCTAssertEqual(activity.directory, "/home/alex/atelier")
 
         // Une réponse relance le travail : l'attente tombe.
-        let tool = #"{"hook_event_name":"PreToolUse","tool_name":"Bash","cwd":"/home/billy/chess-model"}"#
+        let tool = #"{"hook_event_name":"PreToolUse","tool_name":"Bash","cwd":"/home/alex/atelier"}"#
         activity.apply(try XCTUnwrap(HookEvent.parse(line: tool)))
         XCTAssertNil(activity.attention)
         XCTAssertTrue(activity.isActive)
@@ -132,12 +133,12 @@ final class ClaudeAttentionTests: XCTestCase {
     /// relevée sur le serveur de référence.
     func testThePaneDirectoryIsWhatLinksAHookToATmuxSession() {
         let separator = TmuxInspector.separator
-        let line = "\(TmuxInspector.pathPrefix)gribouille\(separator)/home/billy/gribouille-model"
+        let line = "\(TmuxInspector.pathPrefix)atelier\(separator)/home/alex/atelier"
 
         XCTAssertTrue(line.hasPrefix(TmuxInspector.pathPrefix))
         let fields = String(line.dropFirst(TmuxInspector.pathPrefix.count))
             .components(separatedBy: separator)
-        XCTAssertEqual(fields, ["gribouille", "/home/billy/gribouille-model"])
+        XCTAssertEqual(fields, ["atelier", "/home/alex/atelier"])
 
         // Et c'est bien le `cwd` que portait l'événement de permission.
         let event = HookEvent.parse(line: permissionLine)
@@ -145,7 +146,7 @@ final class ClaudeAttentionTests: XCTestCase {
     }
 
     /// Le répertoire doit être émis même hors dépôt git : `api` tourne dans
-    /// `/home/billy`, qui n'est pas un dépôt, et doit quand même se rattacher.
+    /// `/home/alex`, qui n'est pas un dépôt, et doit quand même se rattacher.
     func testTheWatchCommandEmitsTheDirectoryBeforeAskingGit() {
         let command = TmuxInspector.watchCommand()
         guard let cwdIndex = command.range(of: TmuxInspector.pathPrefix),

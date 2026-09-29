@@ -76,7 +76,7 @@ final class TerminalSessionLifecycleTests: XCTestCase {
     }
 
     private func makeSession(command: String) -> TerminalSession {
-        let session = TerminalSession(name: "test", command: command, host: "billy")
+        let session = TerminalSession(name: "test", command: command, host: "alex")
         // Backoff raccourci : on teste la logique, pas la patience.
         session.policy = ReconnectionPolicy(
             base: 0.05, cap: 0.1, maxAttempts: 3, minimumLifetime: 5

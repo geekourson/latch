@@ -58,7 +58,7 @@ final class ShellQuotingTests: XCTestCase {
 
     func testUnremarkableStringsAreLeftAlone() {
         XCTAssertEqual(ShellQuoting.quoted("api"), "api")
-        XCTAssertEqual(ShellQuoting.quoted("billy@192.168.1.37"), "billy@192.168.1.37")
+        XCTAssertEqual(ShellQuoting.quoted("alex@192.168.1.10"), "alex@192.168.1.10")
         XCTAssertEqual(ShellQuoting.quoted("/srv/api"), "/srv/api")
         XCTAssertEqual(ShellQuoting.quoted("--model=opus"), "--model=opus")
     }
@@ -92,7 +92,7 @@ final class ShellQuotingTests: XCTestCase {
         XCTAssertEqual(ShellQuoting.remotePath("~"), "~")
         XCTAssertEqual(ShellQuoting.remotePath("~/api"), "~/api")
         XCTAssertEqual(ShellQuoting.remotePath("~/mes projets"), "~/'mes projets'")
-        XCTAssertEqual(ShellQuoting.remotePath("~billy/api"), "~billy/api")
+        XCTAssertEqual(ShellQuoting.remotePath("~alex/api"), "~alex/api")
     }
 
     func testAbsolutePathsAreQuotedNormally() {

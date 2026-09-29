@@ -213,29 +213,29 @@ final class MCPHostTests: XCTestCase {
         let state = makeState()
         XCTAssertTrue(state.mcpListSessions().isEmpty)
 
-        _ = state.mcpRunCommand("htop", on: "billy", named: "moniteur")
+        _ = state.mcpRunCommand("htop", on: "alex", named: "moniteur")
         let sessions = state.mcpListSessions()
         XCTAssertEqual(sessions.count, 1)
         XCTAssertEqual(sessions[0]["name"] as? String, "moniteur")
-        XCTAssertEqual(sessions[0]["host"] as? String, "billy")
+        XCTAssertEqual(sessions[0]["host"] as? String, "alex")
         state.closeAll()
     }
 
     /// La commande passe par le même échappement que celles tapées à la main.
     func testRunCommandEscapesWhatClaudeSends() {
         let state = makeState()
-        _ = state.mcpRunCommand(#"echo "l'erreur $HOME""#, on: "billy", named: nil)
+        _ = state.mcpRunCommand(#"echo "l'erreur $HOME""#, on: "alex", named: nil)
         let command = try? XCTUnwrap(state.tabs.first?.command)
         XCTAssertEqual(
             command,
-            #"ssh -t billy "echo \"l'erreur \$HOME\"""#
+            #"ssh -t alex "echo \"l'erreur \$HOME\"""#
         )
         state.closeAll()
     }
 
     func testShowFileOpensAPagerAndNeverWrites() {
         let state = makeState()
-        _ = state.mcpShowFile("/srv/api/main.py", on: "billy")
+        _ = state.mcpShowFile("/srv/api/main.py", on: "alex")
         let session = state.tabs.first
         XCTAssertEqual(session?.name, "main.py")
         XCTAssertEqual(session?.command.contains("less -R --"), true)
@@ -299,7 +299,7 @@ final class MCPServerIntegrationTests: XCTestCase {
         var commands: [String] = []
 
         func mcpListSessions() -> [[String: Any]] {
-            [["name": "api", "host": "billy", "state": "latched on"]]
+            [["name": "api", "host": "alex", "state": "latched on"]]
         }
         func mcpOpenSession(named name: String) async -> String {
             opened.append(name)
@@ -507,7 +507,7 @@ final class LatencyProbeTests: XCTestCase {
     }
 
     func testNothingMeasuredMeansNothingShown() {
-        XCTAssertNil(LatencyProbe(host: "billy").label)
+        XCTAssertNil(LatencyProbe(host: "alex").label)
     }
 }
 
@@ -525,9 +525,9 @@ final class LiveSessionTests: XCTestCase {
 
     func testParsesASessionLine() throws {
         let parsed = try XCTUnwrap(
-            LiveSession.parse(fields: ["gribouille", "1756748321", "0", "3"])
+            LiveSession.parse(fields: ["atelier", "1756748321", "0", "3"])
         )
-        XCTAssertEqual(parsed.name, "gribouille")
+        XCTAssertEqual(parsed.name, "atelier")
         XCTAssertFalse(parsed.isAttached)
         XCTAssertEqual(parsed.windowCount, 3)
         XCTAssertEqual(parsed.created, Date(timeIntervalSince1970: 1_756_748_321))
@@ -598,18 +598,18 @@ final class OrphanSessionTests: XCTestCase {
     /// raccourci. Les deux doivent se voir.
     func testASessionWithoutAShortcutIsAnOrphan() {
         let state = makeState()
-        state.store.add(shortcut(session: "api", host: "billy"))
+        state.store.add(shortcut(session: "api", host: "alex"))
 
-        XCTAssertEqual(state.orphanSessions(on: "billy"), [])
+        XCTAssertEqual(state.orphanSessions(on: "alex"), [])
 
         state.setLiveSessionsForTesting(
             [
                 LiveSession(name: "api", created: Date(), isAttached: true, windowCount: 1),
-                LiveSession(name: "gribouille", created: Date(), isAttached: false, windowCount: 1),
+                LiveSession(name: "atelier", created: Date(), isAttached: false, windowCount: 1),
             ],
-            on: "billy"
+            on: "alex"
         )
-        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["gribouille"])
+        XCTAssertEqual(state.orphanSessions(on: "alex").map(\.name), ["atelier"])
     }
 
     /// Les raccourcis d'un autre hôte ne protègent pas une session ici.
@@ -618,9 +618,9 @@ final class OrphanSessionTests: XCTestCase {
         state.store.add(shortcut(session: "api", host: "ailleurs"))
         state.setLiveSessionsForTesting(
             [LiveSession(name: "api", created: Date(), isAttached: false, windowCount: 1)],
-            on: "billy"
+            on: "alex"
         )
-        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["api"])
+        XCTAssertEqual(state.orphanSessions(on: "alex").map(\.name), ["api"])
     }
 
     /// Et les raccourcis locaux ne protègent que les sessions locales.
@@ -636,20 +636,20 @@ final class OrphanSessionTests: XCTestCase {
 
         state.setLiveSessionsForTesting(
             [LiveSession(name: "notes", created: Date(), isAttached: false, windowCount: 1)],
-            on: "billy"
+            on: "alex"
         )
-        XCTAssertEqual(state.orphanSessions(on: "billy").map(\.name), ["notes"])
+        XCTAssertEqual(state.orphanSessions(on: "alex").map(\.name), ["notes"])
     }
 
     /// Adopter une orpheline pré-remplit le builder sur elle, sans rien créer
     /// tant qu'on n'a pas enregistré.
     func testAdoptingPrefillsTheBuilder() {
         let state = makeState()
-        let orphan = LiveSession(name: "gribouille", created: Date(), isAttached: false, windowCount: 2)
-        state.adopt(orphan, on: "billy")
+        let orphan = LiveSession(name: "atelier", created: Date(), isAttached: false, windowCount: 2)
+        state.adopt(orphan, on: "alex")
 
-        XCTAssertEqual(state.editedShortcut?.connection.tmuxSession, "gribouille")
-        XCTAssertEqual(state.editedShortcut?.connection.host, "billy")
+        XCTAssertEqual(state.editedShortcut?.connection.tmuxSession, "atelier")
+        XCTAssertEqual(state.editedShortcut?.connection.host, "alex")
         XCTAssertTrue(state.store.shortcuts.isEmpty, "rien n'est créé avant l'enregistrement")
     }
 }
@@ -659,7 +659,7 @@ final class OrphanSessionTests: XCTestCase {
 @MainActor
 final class WindowReconciliationTests: XCTestCase {
 
-    private func inspector() -> TmuxInspector { TmuxInspector(alias: "billy") }
+    private func inspector() -> TmuxInspector { TmuxInspector(alias: "alex") }
 
     /// Ne rien faire quand la session n'a pas encore été vue : créer des
     /// fenêtres dans une session inconnue les mettrait n'importe où.
@@ -723,7 +723,7 @@ final class RememberWindowTests: XCTestCase {
         state.store.add(
             Shortcut(
                 name: "API",
-                connection: Connection(transport: .mosh, host: "billy", tmuxSession: "api")
+                connection: Connection(transport: .mosh, host: "alex", tmuxSession: "api")
             )
         )
         return state
@@ -736,7 +736,7 @@ final class RememberWindowTests: XCTestCase {
     /// Ce qui tourne dans la fenêtre devient la commande à rejouer.
     func testTheRunningCommandIsCarriedOver() {
         let state = makeState()
-        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "alex")
 
         let windows = try? XCTUnwrap(state.editedShortcut?.windows)
         XCTAssertEqual(windows?.map(\.name), ["logs"])
@@ -747,7 +747,7 @@ final class RememberWindowTests: XCTestCase {
     /// plutôt que d'inscrire « bash », que l'utilisateur devrait effacer.
     func testAPlainShellIsNotRecordedAsACommand() {
         let state = makeState()
-        state.rememberWindow(window(name: "scratch", command: "bash"), on: "billy")
+        state.rememberWindow(window(name: "scratch", command: "bash"), on: "alex")
         XCTAssertEqual(state.editedShortcut?.windows.first?.command, "")
     }
 
@@ -755,26 +755,26 @@ final class RememberWindowTests: XCTestCase {
     /// est proposée, pas imposée.
     func testNothingIsSavedUntilTheBuilderIsConfirmed() {
         let state = makeState()
-        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "alex")
         XCTAssertTrue(state.store.shortcuts.first?.windows.isEmpty ?? false)
     }
 
     /// Reprendre deux fois la même fenêtre ne la double pas.
     func testAWindowAlreadyDeclaredIsNotAddedTwice() {
         let state = makeState()
-        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "alex")
         state.save(try! XCTUnwrap(state.editedShortcut))
 
-        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "billy")
+        state.rememberWindow(window(name: "logs", command: "journalctl"), on: "alex")
         XCTAssertEqual(state.editedShortcut?.windows.count, 1)
     }
 
     /// Une session sans raccourci n'a rien à quoi s'ajouter.
     func testASessionWithoutAShortcutOffersNothing() {
         let state = makeState()
-        XCTAssertNil(state.shortcut(forSession: "gribouille", on: "billy"))
+        XCTAssertNil(state.shortcut(forSession: "atelier", on: "alex"))
         state.rememberWindow(
-            LiveWindow(session: "gribouille", index: 0, name: "x", isActive: false), on: "billy"
+            LiveWindow(session: "atelier", index: 0, name: "x", isActive: false), on: "alex"
         )
         XCTAssertNil(state.editedShortcut)
     }

@@ -24,17 +24,17 @@ final class HookEventTests: XCTestCase {
                 line: line([
                     "hook_event_name": "PreToolUse",
                     "session_id": "abc123",
-                    "cwd": "/home/billy/api",
+                    "cwd": "/home/alex/api",
                     "tool_name": "Edit",
-                    "tool_input": ["file_path": "/home/billy/api/main.py"],
+                    "tool_input": ["file_path": "/home/alex/api/main.py"],
                 ])
             )
         )
         XCTAssertEqual(event.kind, .preToolUse)
         XCTAssertEqual(event.sessionID, "abc123")
         XCTAssertEqual(event.toolName, "Edit")
-        XCTAssertEqual(event.filePath, "/home/billy/api/main.py")
-        XCTAssertEqual(event.cwd, "/home/billy/api")
+        XCTAssertEqual(event.filePath, "/home/alex/api/main.py")
+        XCTAssertEqual(event.cwd, "/home/alex/api")
     }
 
     /// Les outils ne nomment pas leur cible de la même façon.

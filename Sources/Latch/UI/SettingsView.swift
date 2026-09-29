@@ -173,7 +173,7 @@ private struct ThemePreview: View {
                 }
             }
 
-            Text("latch on to billy")
+            Text("latch on to alex")
                 .font(.system(size: 11.5, design: .monospaced))
                 .foregroundStyle(Color(theme.foreground.nsColor))
                 .frame(maxWidth: .infinity, alignment: .leading)

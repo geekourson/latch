@@ -1,5 +1,17 @@
 <h1 align="center">Latch</h1>
 <p align="center"><em>Your sessions, still running.</em></p>
+<p align="center">
+  <img alt="statut : alpha" src="https://img.shields.io/badge/statut-alpha-D97757">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-8FB09A">
+  <img alt="licence MIT" src="https://img.shields.io/badge/licence-MIT-C89B6A">
+</p>
+
+> [!WARNING]
+> **Alpha.** Latch est complet au sens de sa feuille de route, et utilisé tous
+> les jours par son auteur — mais sur **une seule machine et un seul serveur**.
+> Rien n'a été éprouvé ailleurs. Attendez-vous à des arêtes vives, et voyez
+> [Ce qui n'a pas été vérifié](#ce-qui-na-pas-été-vérifié) avant de compter
+> dessus.
 
 Latch est un gestionnaire de sessions distantes pour macOS. Un clic sur une
 session ouvre un terminal attaché à une session `tmux` sur un serveur, quel que
@@ -10,10 +22,27 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.4.** La feuille de route est parcourue : raccourcis persistés en JSON,
-barre latérale, onglets, écran du builder, import de thèmes, sonde serveur et
-cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
-Claude Code, fenêtres tmux réelles et serveur MCP.
+**v0.4 — alpha.** La feuille de route est parcourue : raccourcis persistés en
+JSON, barre latérale, onglets, écran du builder, import de thèmes, sonde serveur
+et cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
+Claude Code, fenêtres tmux réelles et serveur MCP. 315 tests passent.
+
+Parcourue ne veut pas dire éprouvée. Ce qui suit est décrit tel que c'est
+construit ; ce qui n'a jamais tourné ailleurs que sur la machine de
+développement est dit plus bas, nommément.
+
+### Ce qui n'a pas été vérifié
+
+| | |
+|---|---|
+| **Un seul serveur** | Tout a été validé contre un hôte Debian. La sonde prétend reconnaître six familles de distributions ; **cinq n'ont jamais été exercées**. |
+| **La reconnexion au réveil** | Le code et ses tests existent, le scénario complet — capot fermé, réseau perdu, retour — n'a jamais été observé de bout en bout. |
+| **Le MCP piloté par Claude Code** | Le serveur a été exercé à la main. Le chemin réel, Claude Code sur le serveur appelant Latch par le tunnel, reste à voir tourner. |
+| **La distribution** | Aucune release n'a été produite : signature et notarisation exigent un compte développeur Apple. Le workflow existe, il n'a jamais été joué. |
+| **Le glisser-déposer** | Réordonner les étapes de pré-vol et les fenêtres fonctionne en théorie, jamais essayé sérieusement. |
+
+Rien de tout cela n'est cassé à ma connaissance. C'est simplement non vérifié,
+et la différence compte quand quelqu'un d'autre s'en sert.
 
 ### La barre latérale montre les vraies fenêtres
 
@@ -102,8 +131,8 @@ et affiche en bas la commande générée, **éditable**. La modifier bascule le
 raccourci en mode personnalisé, avec un bouton pour revenir au mode assisté.
 
 ```bash
-ssh -t billy "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
-mosh billy -- tmux new -A -s dev
+ssh -t alex "tmux new -A -s api -c ~/api 'claude --continue; exec \$SHELL'"
+mosh alex -- tmux new -A -s dev
 tmux new -A -s notes -c ~/notes
 ```
 
@@ -200,7 +229,7 @@ du terminal :
 
 - **Réseau local** (Réglages → Confidentialité et sécurité → Réseau local).
   Sans elle, un serveur du LAN est injoignable et Latch affiche
-  `ssh: connect to host 192.168.1.37 port 22: No route to host`. macOS propose
+  `ssh: connect to host 192.168.1.10 port 22: No route to host`. macOS propose
   la demande au premier lancement ; si elle a été refusée, il faut la
   réactiver à la main.
 - **Signature**. Latch est signée localement pendant le développement. Un `.app`
@@ -218,9 +247,9 @@ Au premier lancement, la barre latérale se remplit avec les alias `Host` de
 `~/.ssh/config`. Ajoutez-y l'entrée correspondant à votre serveur :
 
 ```
-Host billy
-    HostName 192.168.1.37
-    User billy
+Host alex
+    HostName 192.168.1.10
+    User alex
     IdentityFile ~/.ssh/id_ed25519
 ```
 
@@ -240,7 +269,7 @@ façons de ne pas avoir à modifier `~/.ssh/config` tous les mois, de la plus
 simple à la plus solide :
 
 1. réserver l'adresse dans le routeur, par adresse MAC ;
-2. utiliser le nom mDNS de la machine, `billy.local`, valable sur le réseau
+2. utiliser le nom mDNS de la machine, `alex.local`, valable sur le réseau
    local ;
 3. installer [Tailscale](https://tailscale.com), qui donne un nom stable et
    fonctionne aussi hors du réseau local.

@@ -298,7 +298,7 @@ private struct ConnectionFields: View {
             if connection.transport.isRemote {
                 Field(
                     "Hôte",
-                    placeholder: "billy@192.168.1.37 ou un alias ~/.ssh/config",
+                    placeholder: "alex@192.168.1.10 ou un alias ~/.ssh/config",
                     text: $connection.host
                 )
                 ResolvedHost(alias: connection.host)

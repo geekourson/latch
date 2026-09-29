@@ -5,7 +5,7 @@
 //  Ce qu'il faut ajouter à un `ssh` pour joindre un hôte donné.
 //
 //  Le §4 dit « alias ~/.ssh/config **de préférence** » : ce fichier n'est pas
-//  obligatoire. `billy@192.168.1.37` suffit, et ssh essaie tout seul les clés
+//  obligatoire. `alex@192.168.1.10` suffit, et ssh essaie tout seul les clés
 //  par défaut du Mac. Ces options ne servent qu'aux cas où les valeurs par
 //  défaut ne conviennent pas — un port déplacé, une clé qui n'a pas un nom
 //  standard.

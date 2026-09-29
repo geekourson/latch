@@ -74,7 +74,7 @@ enum ShellQuoting {
         let prefix = String(path[path.startIndex..<afterSlash])
         let rest = String(path[afterSlash...])
 
-        // `~`, `~/`, `~billy/` sont sûrs tels quels ; un nom d'utilisateur
+        // `~`, `~/`, `~alex/` sont sûrs tels quels ; un nom d'utilisateur
         // exotique ne l'est pas, et là on préfère tout citer et perdre
         // l'expansion plutôt que produire une commande imprévisible.
         let user = prefix.dropFirst().drop(while: { $0 == "/" })

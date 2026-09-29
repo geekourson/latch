@@ -261,7 +261,7 @@ enum CommandBuilder {
     }
 
     /// Ne remplace que le nom du programme, pas ses arguments :
-    /// `claude --continue` devient `/home/billy/.local/bin/claude --continue`.
+    /// `claude --continue` devient `/home/alex/.local/bin/claude --continue`.
     private static func resolveFirstWord(_ command: String, in paths: [String: String]) -> String {
         guard let space = command.firstIndex(of: " ") else {
             return resolve(command, in: paths)

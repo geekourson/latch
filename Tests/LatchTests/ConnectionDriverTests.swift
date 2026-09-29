@@ -12,7 +12,7 @@ import XCTest
 
 private func shortcut(
     transport: Transport = .mosh,
-    host: String = "billy",
+    host: String = "alex",
     session: String = "api",
     directory: String? = nil,
     initial: InitialCommand = .shell,
@@ -84,7 +84,7 @@ final class ConnectionDriverSelectionTests: XCTestCase {
         let plan = try await SSHDriver().plan(
             for: shortcut(transport: .mosh), degradation: .moshMissing
         )
-        XCTAssertEqual(plan.command, #"ssh -t billy "tmux new -A -s api""#)
+        XCTAssertEqual(plan.command, #"ssh -t alex "tmux new -A -s api""#)
         XCTAssertNotNil(plan.notice)
     }
 }
@@ -145,7 +145,7 @@ final class MoshDriverTests: XCTestCase {
         driver.availability = .system(path: "/opt/homebrew/bin/mosh")
 
         let plan = try await driver.plan(for: shortcut(session: "dev"), degradation: .none)
-        XCTAssertEqual(plan.command, "/opt/homebrew/bin/mosh billy -- tmux new -A -s dev")
+        XCTAssertEqual(plan.command, "/opt/homebrew/bin/mosh alex -- tmux new -A -s dev")
         XCTAssertNotNil(plan.notice, "l'interface doit dire qu'on n'utilise pas le binaire embarqué")
     }
 
@@ -169,14 +169,14 @@ final class MoshDriverTests: XCTestCase {
         let command = try MoshDriver.handshakeCommand(
             for: shortcut(directory: "~/api", initial: .claude, keepShell: true),
             clientPath: directory.appendingPathComponent("fake-client").path,
-            address: "192.168.1.37"
+            address: "192.168.1.10"
         )
         let output = try ShellHarness.run(command, prependingToPath: directory)
 
         XCTAssertEqual(
             String(decoding: output, as: UTF8.self)
                 .split(separator: "\n").last.map(String.init),
-            "192.168.1.37|60001|6WsCM6HZKJXA1uZbEA6Bcw"
+            "192.168.1.10|60001|6WsCM6HZKJXA1uZbEA6Bcw"
         )
     }
 
@@ -186,7 +186,7 @@ final class MoshDriverTests: XCTestCase {
         let command = try MoshDriver.handshakeCommand(
             for: shortcut(),
             clientPath: "/Applications/Latch.app/Contents/MacOS/mosh-client",
-            address: "192.168.1.37"
+            address: "192.168.1.10"
         )
         XCTAssertTrue(command.contains("MOSH_KEY=$_latch_key exec "), command)
         XCTAssertFalse(command.contains("env MOSH_KEY"), "un `env` exposerait la clé dans ps")
@@ -210,7 +210,7 @@ final class MoshDriverTests: XCTestCase {
         let command = try MoshDriver.handshakeCommand(
             for: shortcut(),
             clientPath: directory.appendingPathComponent("fake-client").path,
-            address: "192.168.1.37"
+            address: "192.168.1.10"
         )
         let output = String(
             decoding: try ShellHarness.run(command, prependingToPath: directory), as: UTF8.self
@@ -231,19 +231,19 @@ final class MoshDriverTests: XCTestCase {
     // MARK: Résolution
 
     /// `ssh -G` applique tout le ~/.ssh/config ; on ne réimplémente pas ce
-    /// fichier. L'alias « billy » du §14 y est déclaré.
+    /// fichier. L'alias « alex » du §14 y est déclaré.
     func testResolvesAnAliasThroughSSHConfig() throws {
         guard FileManager.default.fileExists(atPath: NSHomeDirectory() + "/.ssh/config") else {
             throw XCTSkip("pas de ~/.ssh/config sur cette machine")
         }
-        let hostName = MoshDriver.sshHostName(for: "billy")
+        let hostName = MoshDriver.sshHostName(for: "alex")
         XCTAssertNotNil(hostName)
         XCTAssertNotEqual(hostName, "", "ssh -G rend toujours une valeur")
     }
 
     func testResolvesNumericAddresses() {
         XCTAssertEqual(MoshDriver.numericAddress(of: "127.0.0.1"), "127.0.0.1")
-        XCTAssertEqual(MoshDriver.numericAddress(of: "192.168.1.37"), "192.168.1.37")
+        XCTAssertEqual(MoshDriver.numericAddress(of: "192.168.1.10"), "192.168.1.10")
         XCTAssertNil(MoshDriver.numericAddress(of: "cet-hote-n-existe-pas.invalid"))
     }
 }
@@ -347,21 +347,21 @@ final class SSHOptionsTests: XCTestCase {
         XCTAssertEqual(SSHOptions.none.arguments, [])
         XCTAssertNil(SSHOptions.none.moshArgument)
 
-        var direct = shortcut(transport: .ssh, host: "billy@192.168.1.37")
+        var direct = shortcut(transport: .ssh, host: "alex@192.168.1.10")
         direct.connection.tmuxSession = "api"
         XCTAssertEqual(
             try CommandBuilder.build(direct),
-            #"ssh -t billy@192.168.1.37 "tmux new -A -s api""#
+            #"ssh -t alex@192.168.1.10 "tmux new -A -s api""#
         )
     }
 
     func testPortAndKeyReachTheCommandLine() throws {
-        var custom = shortcut(transport: .ssh, host: "billy@192.168.1.37")
+        var custom = shortcut(transport: .ssh, host: "alex@192.168.1.10")
         custom.connection.port = 2222
-        custom.connection.identityFile = "/Users/billy/.ssh/id_serveur"
+        custom.connection.identityFile = "/Users/alex/.ssh/id_serveur"
 
         let command = try CommandBuilder.build(custom)
-        XCTAssertTrue(command.hasPrefix("ssh -t -p 2222 -i /Users/billy/.ssh/id_serveur"), command)
+        XCTAssertTrue(command.hasPrefix("ssh -t -p 2222 -i /Users/alex/.ssh/id_serveur"), command)
         // Nommer une clé veut dire celle-là et pas une autre.
         XCTAssertTrue(command.contains("-o IdentitiesOnly=yes"), command)
     }
@@ -375,13 +375,13 @@ final class SSHOptionsTests: XCTestCase {
 
     /// mosh ne comprend ni `-p` ni `-i` : il les passe au ssh qu'il ouvre.
     func testMoshForwardsThemThroughItsOwnSSH() throws {
-        var custom = shortcut(transport: .mosh, host: "billy@192.168.1.37", session: "dev")
+        var custom = shortcut(transport: .mosh, host: "alex@192.168.1.10", session: "dev")
         custom.connection.port = 2222
 
         let command = try CommandBuilder.build(custom)
         XCTAssertEqual(
             command,
-            "mosh '--ssh=ssh -p 2222' billy@192.168.1.37 -- tmux new -A -s dev"
+            "mosh '--ssh=ssh -p 2222' alex@192.168.1.10 -- tmux new -A -s dev"
         )
     }
 
@@ -400,8 +400,8 @@ final class SSHOptionsTests: XCTestCase {
     /// Le repli en shell nu garde le port et la clé : sans eux il ne joindrait
     /// pas l'hôte du tout.
     func testTheBareShellFallbackKeepsThem() {
-        var connection = Connection(transport: .ssh, host: "billy", tmuxSession: "api")
+        var connection = Connection(transport: .ssh, host: "alex", tmuxSession: "api")
         connection.port = 2222
-        XCTAssertEqual(CommandBuilder.bareShellCommand(connection), "ssh -t -p 2222 billy")
+        XCTAssertEqual(CommandBuilder.bareShellCommand(connection), "ssh -t -p 2222 alex")
     }
 }

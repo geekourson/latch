@@ -29,7 +29,7 @@ enum SSHConfig {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("#") else { continue }
 
-            // `Host billy autre` déclare deux alias sur une ligne. Le mot-clé
+            // `Host alex autre` déclare deux alias sur une ligne. Le mot-clé
             // est insensible à la casse, et un `=` peut remplacer l'espace.
             let normalised = line.replacingOccurrences(of: "=", with: " ")
             let fields = normalised.split(whereSeparator: \.isWhitespace).map(String.init)
