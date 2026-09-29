@@ -18,7 +18,7 @@ session ouvre un terminal attaché à une session `tmux` sur un serveur, quel qu
 soit l'état de la connexion précédente. Vous fermez le Mac, vous le rouvrez le
 lendemain, la session est là où vous l'aviez laissée.
 
-![Latch attaché à une session tmux distante](docs/screenshot.png)
+![Latch : la barre latérale, ses sessions et leurs fenêtres tmux, et la barre d'état](docs/screenshot.png)
 
 ## État
 
