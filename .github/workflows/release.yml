@@ -64,16 +64,13 @@ jobs:
       # La signature et la notarisation exigent un compte développeur Apple
       # (99 €/an). Sans les secrets, la release sort non signée : le premier
       # lancement demandera alors un clic droit → Ouvrir.
-      - name: Signer et notariser
+      - name: Signer l'application
         id: sign
         if: steps.signing.outputs.available == 'true'
         env:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
           MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
-          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
-          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
-          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
         run: |
           set -euo pipefail
           APP=build/Latch.xcarchive/Products/Applications/Latch.app
@@ -94,7 +91,57 @@ jobs:
             --sign "$MACOS_SIGNING_IDENTITY" "$APP"
           codesign --verify --strict --verbose=2 "$APP"
 
-          hdiutil create -volname Latch -srcfolder "$APP" -ov -format UDZO build/Latch.dmg
+      # Le disque se fabrique une fois, signé ou non : seule l'app diffère. Il
+      # était empaqueté deux fois, une par branche, et les deux copies ont
+      # divergé dès qu'il a fallu y ajouter quelque chose.
+      - name: Fabriquer le disque
+        run: |
+          set -euo pipefail
+          APP=build/Latch.xcarchive/Products/Applications/Latch.app
+          STAGE=build/dmg
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+
+          # L'app à côté d'un raccourci vers Applications : c'est le geste que
+          # tout le monde connaît, et il évite de lancer Latch depuis le disque
+          # monté, en lecture seule.
+          ln -s /Applications "$STAGE/Applications"
+
+          # L'icône du volume, reprise de celle de l'app. Sans elle, le disque
+          # monté porte l'icône générique d'un disque — et le .dmg aussi.
+          cp "$APP/Contents/Resources/AppIcon.icns" "$STAGE/.VolumeIcon.icns"
+
+          # Le fichier ne suffit pas : il faut l'attribut « icône
+          # personnalisée », et il ne survit pas à une compression directe.
+          # Posé sur le dossier source, GetFileInfo rend « c » minuscule après
+          # coup ; posé sur le volume monté, « C ». D'où ce détour par une
+          # image inscriptible, montée le temps de marquer le volume.
+          hdiutil create -volname Latch -srcfolder "$STAGE" \
+            -ov -format UDRW -o build/Latch-rw.dmg
+          mkdir -p build/mnt
+          hdiutil attach build/Latch-rw.dmg -nobrowse -mountpoint build/mnt
+          SetFile -a C build/mnt
+          hdiutil detach build/mnt
+
+          hdiutil convert build/Latch-rw.dmg -format UDZO -ov -o build/Latch.dmg
+
+          # On vérifie plutôt que d'espérer : sans le C majuscule, le disque
+          # sort avec l'icône générique et personne ne s'en aperçoit avant le
+          # téléchargement.
+          hdiutil attach build/Latch.dmg -nobrowse -readonly -mountpoint build/verify
+          GetFileInfo build/verify | grep -q 'attributes:.*C' \
+            || { echo "::error::l'icône du volume n'a pas été marquée"; exit 1; }
+          hdiutil detach build/verify
+
+      - name: Signer et notariser le disque
+        if: steps.signing.outputs.available == 'true'
+        env:
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: |
+          set -euo pipefail
           codesign --force --sign "$MACOS_SIGNING_IDENTITY" build/Latch.dmg
 
           xcrun notarytool submit build/Latch.dmg \
@@ -103,12 +150,6 @@ jobs:
             --team-id "$NOTARY_TEAM_ID" \
             --wait
           xcrun stapler staple build/Latch.dmg
-
-      - name: Empaqueter sans signature
-        if: steps.signing.outputs.available == 'false'
-        run: |
-          APP=build/Latch.xcarchive/Products/Applications/Latch.app
-          hdiutil create -volname Latch -srcfolder "$APP" -ov -format UDZO build/Latch.dmg
 
       # GPLv3 : le binaire mosh embarqué voyage avec ses sources et le script
       # exact qui l'a produit.
