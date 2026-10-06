@@ -60,10 +60,14 @@ struct UpgradePanelView: View {
                         claudeBlock(claude)
                     }
                     offPathBlock
+
+                    // Claude Code tourne aussi sur le Mac : ces deux-là ne
+                    // dépendent pas d'une connexion.
+                    hooksBlock
+                    mcpBlock
+
                     if server != nil {
                         authenticationBlock
-                        hooksBlock
-                        mcpBlock
                         localMoshBlock
                         pathHint
                         skipToggle
@@ -75,12 +79,16 @@ struct UpgradePanelView: View {
         .frame(width: 340)
         .background(Color.latchSurface)
         .task(id: target.id) {
+            // Les hooks se vérifient des deux côtés : une chaîne vide désigne
+            // le Mac. Le trousseau et la clé ssh, eux, n'ont de sens que pour
+            // un hôte qu'il faut joindre.
+            hooksInstalled = await HookInstaller.isInstalled(on: target.alias ?? "")
+
             guard let alias = target.alias else { return }
             hasStoredPassword = Keychain.hasPassword(
                 alias: alias, account: SSHConfig.user(for: alias)
             )
             keyWorks = await SSHKeySetup.worksWithoutPassword(alias: alias)
-            hooksInstalled = await HookInstaller.isInstalled(on: alias)
         }
     }
 
@@ -464,7 +472,8 @@ struct UpgradePanelView: View {
             }
             .font(.system(size: 11))
             .confirmationDialog(
-                "Installer les hooks sur \(target.alias ?? target.name) ?",
+                target.alias.map { String(format: localized("Installer les hooks sur %@ ?"), $0) }
+                    ?? localized("Installer les hooks sur ce Mac ?"),
                 isPresented: $confirmsHookInstall,
                 titleVisibility: .visible
             ) {
@@ -522,12 +531,21 @@ struct UpgradePanelView: View {
                 Label("Piloter Latch depuis Claude Code", systemImage: "point.3.connected.trianglepath.dotted")
                     .labelStyle(SectionLabelStyle())
 
-                Text(
-                    String(
-                        format: localized("À lancer une fois sur %@, pendant qu'une session Latch y est ouverte — c'est elle qui porte le tunnel. Claude Code pourra alors ouvrir un onglet, lancer une commande ou afficher un fichier."),
-                        target.alias ?? target.name
-                    )
-                )
+                Group {
+                    if let alias = target.alias {
+                        Text(
+                            String(
+                                format: localized("À lancer une fois sur %@, pendant qu'une session Latch y est ouverte — c'est elle qui porte le tunnel. Claude Code pourra alors ouvrir un onglet, lancer une commande ou afficher un fichier."),
+                                alias
+                            )
+                        )
+                    } else {
+                        Text.paragraph("À lancer une fois dans un terminal de ce Mac. Pas de "
+                            + "tunnel ici : le serveur est déjà à cette adresse. Claude Code "
+                            + "pourra alors ouvrir un onglet, lancer une commande ou afficher "
+                            + "un fichier.")
+                    }
+                }
                     .font(.system(size: 11))
                     .foregroundStyle(Color.latchTextDim)
                     .fixedSize(horizontal: false, vertical: true)

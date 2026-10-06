@@ -6,6 +6,10 @@
 //  d'événements, sans TTY et sans rien envoyer. Si elle tombe, la session de
 //  travail n'en sait rien — c'est tout l'intérêt de la garder séparée.
 //
+//  Sur le Mac, il n'y a pas de connexion : le journal est un fichier d'ici, et
+//  `tail -F` suffit. Claude Code tourne aussi bien en local, et l'indicateur
+//  n'a aucune raison de s'éteindre pour autant.
+//
 
 import Combine
 import Foundation
@@ -13,7 +17,10 @@ import Foundation
 @MainActor
 final class HookStream: ObservableObject {
 
+    /// L'alias ssh de l'hôte, ou une chaîne vide pour le Mac lui-même.
     let alias: String
+
+    var isLocal: Bool { alias.isEmpty }
     /// `-R port:127.0.0.1:port` : c'est par ce tunnel que Claude Code, sur le
     /// serveur, atteint le serveur MCP de Latch (§10). La connexion des hooks
     /// le porte parce qu'elle existe déjà, et pour tous les transports —
@@ -63,19 +70,28 @@ final class HookStream: ObservableObject {
 
     private func launch() {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        var arguments = [
-            // Pas de TTY, pas d'agent, pas d'interaction : cette connexion doit
-            // vivre en arrière-plan sans jamais réclamer quoi que ce soit.
-            "-o", "BatchMode=yes",
-            "-o", "ServerAliveInterval=30",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "ConnectTimeout=10",
-            "-o", "ExitOnForwardFailure=no",
-        ]
-        if let remoteForward { arguments += ["-R", remoteForward] }
-        arguments += [alias, HookInstaller.followCommand]
-        task.arguments = arguments
+
+        if isLocal {
+            // Rien à joindre, et rien à tunneler : Claude Code écrit son
+            // journal ici même.
+            task.executableURL = URL(fileURLWithPath: "/bin/sh")
+            task.arguments = ["-c", HookInstaller.followCommand]
+        } else {
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            var arguments = [
+                // Pas de TTY, pas d'agent, pas d'interaction : cette connexion
+                // doit vivre en arrière-plan sans jamais réclamer quoi que ce
+                // soit.
+                "-o", "BatchMode=yes",
+                "-o", "ServerAliveInterval=30",
+                "-o", "ServerAliveCountMax=3",
+                "-o", "ConnectTimeout=10",
+                "-o", "ExitOnForwardFailure=no",
+            ]
+            if let remoteForward { arguments += ["-R", remoteForward] }
+            arguments += [alias, HookInstaller.followCommand]
+            task.arguments = arguments
+        }
 
         let out = Pipe()
         task.standardOutput = out

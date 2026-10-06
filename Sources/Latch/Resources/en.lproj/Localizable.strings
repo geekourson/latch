@@ -231,3 +231,7 @@
 "Inactif" = "Idle";
 "Rien ne tourne, et rien n'attend." = "Nothing is running, and nothing is waiting.";
 "La pastille pleine dit qu'une action est attendue de toi ; l'anneau, que tu peux prendre ton temps." = "A filled dot means something is waiting on you; a ring means you can take your time.";
+
+/* --- Hooks et MCP sur le Mac --- */
+"Installer les hooks sur ce Mac ?" = "Install the hooks on this Mac?";
+"À lancer une fois dans un terminal de ce Mac. Pas de tunnel ici : le serveur est déjà à cette adresse. Claude Code pourra alors ouvrir un onglet, lancer une commande ou afficher un fichier." = "Run this once in a terminal on this Mac. No tunnel here: the server is already at that address. Claude Code will then be able to open a tab, run a command or show a file.";

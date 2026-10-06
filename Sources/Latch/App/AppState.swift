@@ -197,16 +197,17 @@ final class AppState: ObservableObject {
     /// journal d'événements. Elle échoue en silence si les hooks ne sont pas
     /// installés : le fichier est simplement vide.
     private func followHooks(on host: String) {
-        // Le Mac aussi a des fenêtres tmux et un dépôt à montrer : il n'a
-        // simplement ni hooks Claude Code ni latence réseau.
         guard inspectors[host] == nil else { return }
         watchTmux(on: host)
 
-        guard !host.isEmpty, hookStreams[host] == nil else { return }
+        guard hookStreams[host] == nil else { return }
 
+        // Claude Code tourne aussi sur le Mac, et ses hooks écrivent au même
+        // endroit. Seul le tunnel n'a pas lieu d'être : en local, le serveur
+        // MCP est déjà sur 127.0.0.1.
         let stream = HookStream(
             alias: host,
-            remoteForward: mcp.isRunning ? mcp.remoteForwardOption : nil
+            remoteForward: host.isEmpty || !mcp.isRunning ? nil : mcp.remoteForwardOption
         )
         stream.onEvent = { [weak self, weak stream] event in
             guard let self, let stream else { return }
@@ -216,7 +217,11 @@ final class AppState: ObservableObject {
         hookStreams[host] = stream
         stream.start()
 
-        // La latence se mesure sur l'adresse réelle, pas sur l'alias.
+        // Mesurer la latence vers soi-même n'apprend rien : la sonde reste
+        // réservée aux hôtes qu'il faut vraiment joindre.
+        guard !host.isEmpty else { return }
+
+        // Elle se mesure sur l'adresse réelle, pas sur l'alias.
         let probe = LatencyProbe(host: SSHConfig.effectiveValue("hostname", for: host) ?? host)
         latencyProbes[host] = probe
         probe.objectWillChange

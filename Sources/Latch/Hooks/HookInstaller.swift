@@ -123,7 +123,8 @@ enum HookInstaller {
 
         return [
             "command -v python3 >/dev/null || "
-                + "{ echo 'latch: python3 est requis pour modifier ~/.claude/settings.json' >&2; exit 1; }",
+                + "{ echo 'latch: python3 est requis pour modifier ~/.claude/settings.json.' >&2; "
+                + "echo 'latch: sur un Mac, xcode-select --install le fournit.' >&2; exit 1; }",
             "mkdir -p ~/.latch",
             "printf %s '\(hook)' | base64 -d > ~/.latch/hook.sh",
             "chmod 755 ~/.latch/hook.sh",
@@ -163,16 +164,26 @@ enum HookInstaller {
         try await run(installCommand, on: alias)
     }
 
-    /// Les hooks sont-ils déjà en place ? Un aller-retour, sans rien modifier.
+    /// Les hooks sont-ils déjà en place ? Un aller-retour — aucun sur le Mac —
+    /// sans rien modifier.
     static func isInstalled(on alias: String) async -> Bool {
         let check = "test -x ~/.latch/hook.sh && grep -q '.latch/hook.sh' ~/.claude/settings.json"
         return (try? await run(check, on: alias)) != nil
     }
 
+    /// `alias` vide désigne le Mac : la commande s'exécute ici, sans ssh. Elle
+    /// est la même des deux côtés — elle n'écrit que dans le dossier personnel.
     private static func run(_ command: String, on alias: String) async throws -> String {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, command]
+        if alias.isEmpty {
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", command]
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            process.arguments = [
+                "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", alias, command,
+            ]
+        }
 
         let output = Pipe()
         process.standardOutput = output
