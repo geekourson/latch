@@ -660,10 +660,10 @@ struct UpgradePanelView: View {
     private func close() {
         let server = self.server
         app.upgradingTarget = nil
-        // La sonde d'un serveur est en cache : on l'invalide pour que le
+        // Les deux sondes sont en cache : on les rafraîchit pour que le
         // bandeau disparaisse tout seul si l'installation a réussi, et reste
-        // sinon. Celle du Mac est relevée à la demande, rien à invalider.
-        guard let server else { return }
+        // sinon. Pas de confirmation de succès qu'on n'aurait pas vérifiée.
+        guard let server else { return app.refreshLocalProbe() }
         Task {
             app.store.invalidateProbe(serverID: server.id)
             await app.store.probe(serverID: server.id, force: true)

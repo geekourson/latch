@@ -255,6 +255,46 @@ private struct WindowRow: View {
     @State private var confirmsClosing = false
 
     var body: some View {
+        Group {
+            if isRenaming {
+                // Pas de bouton pendant la saisie : il avalerait les clics
+                // destinés au champ.
+                row
+            } else {
+                // Un `Button`, pas un `.onTapGesture` : dans la barre latérale,
+                // qui défile, un geste de tap attend de perdre l'arbitrage
+                // contre le défilement avant de se déclencher.
+                Button { app.select(window, on: host) } label: { row }
+                    .buttonStyle(.plain)
+            }
+        }
+        .contextMenu {
+            Button("Renommer…") {
+                newName = window.name
+                isRenaming = true
+            }
+            Button("Nouvelle fenêtre ici") { app.newWindow(inSession: window.session, on: host) }
+            if app.shortcut(forSession: window.session, on: host) != nil {
+                Button("Ajouter au raccourci…") { app.rememberWindow(window, on: host) }
+            }
+            Divider()
+            Button("Fermer la fenêtre…", role: .destructive) { confirmsClosing = true }
+        }
+        .confirmationDialog(
+            "Fermer la fenêtre « \(window.name) » ?",
+            isPresented: $confirmsClosing,
+            titleVisibility: .visible
+        ) {
+            Button("Fermer", role: .destructive) { app.closeWindow(window, on: host) }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Ce qui y tourne sera interrompu.")
+        }
+    }
+
+    /// Le contenu de la ligne, séparé pour pouvoir l'envelopper — ou non —
+    /// dans un bouton selon qu'on la lit ou qu'on la renomme.
+    private var row: some View {
         HStack(spacing: 5) {
             Text("\(window.index)")
                 .foregroundStyle(Color.latchTextFaint)
@@ -289,29 +329,6 @@ private struct WindowRow: View {
                 .fill(window.isActive ? Color.latchSurface : .clear)
         )
         .contentShape(Rectangle())
-        .onTapGesture { if !isRenaming { app.select(window, on: host) } }
-        .contextMenu {
-            Button("Renommer…") {
-                newName = window.name
-                isRenaming = true
-            }
-            Button("Nouvelle fenêtre ici") { app.newWindow(inSession: window.session, on: host) }
-            if app.shortcut(forSession: window.session, on: host) != nil {
-                Button("Ajouter au raccourci…") { app.rememberWindow(window, on: host) }
-            }
-            Divider()
-            Button("Fermer la fenêtre…", role: .destructive) { confirmsClosing = true }
-        }
-        .confirmationDialog(
-            "Fermer la fenêtre « \(window.name) » ?",
-            isPresented: $confirmsClosing,
-            titleVisibility: .visible
-        ) {
-            Button("Fermer", role: .destructive) { app.closeWindow(window, on: host) }
-            Button("Annuler", role: .cancel) {}
-        } message: {
-            Text("Ce qui y tourne sera interrompu.")
-        }
     }
 
     private func commitRename() {
@@ -386,7 +403,7 @@ private struct LocalSectionHeader: View {
     @EnvironmentObject private var app: AppState
 
     private var degradation: Degradation {
-        ServerCapabilities.degradation(for: LocalTools.probe())
+        ServerCapabilities.degradation(for: app.localProbe)
     }
 
     var body: some View {

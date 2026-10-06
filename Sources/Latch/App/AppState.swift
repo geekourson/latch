@@ -29,6 +29,14 @@ final class AppState: ObservableObject {
     /// Ce que les hooks du §10 racontent, par hôte.
     @Published private(set) var claudeActivity: [String: ClaudeActivity] = [:]
 
+    /// La sonde du Mac, tenue à jour plutôt que relevée à chaque affichage :
+    /// elle parcourt le disque, et la barre latérale la lisait à chaque
+    /// rendu — donc à chaque changement d'onglet.
+    @Published private(set) var localProbe: ProbeResult = LocalTools.probe()
+
+    /// À rappeler quand quelque chose a pu être installé sur le Mac.
+    func refreshLocalProbe() { localProbe = LocalTools.probe() }
+
     /// Une connexion ssh secondaire par hôte ayant un onglet ouvert.
     private var hookStreams: [String: HookStream] = [:]
 

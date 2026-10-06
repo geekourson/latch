@@ -33,43 +33,54 @@ private struct TabItem: View {
     private var isSelected: Bool { app.selectedTabID == session.id }
 
     var body: some View {
-        HStack(spacing: 7) {
-            Circle()
-                .fill(dotColor)
-                .frame(width: 5, height: 5)
+        // Un `Button`, pas un `.onTapGesture` : dans un conteneur défilant, un
+        // geste de tap doit d'abord perdre l'arbitrage contre le défilement
+        // avant de se déclencher. Le délai est petit mais se sent à chaque
+        // clic, et c'est ce qui rendait le changement d'onglet poussif.
+        Button {
+            app.selectedTabID = session.id
+        } label: {
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(session.connection.dotColor)
+                    .frame(width: 5, height: 5)
 
-            Text(session.title)
-                .font(.system(size: 11.5))
-                .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
-                .lineLimit(1)
-
-            // La croix n'apparaît qu'au survol : au repos, la barre reste calme.
-            Button {
-                app.close(tabID: session.id)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .medium))
-                    .foregroundStyle(Color.latchTextDim)
-                    .frame(width: 14, height: 14)
+                Text(session.title)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
+                    .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .opacity(isHovering || isSelected ? 1 : 0)
+            .padding(.leading, 12)
+            // La place de la croix est réservée en permanence : sans ça, le
+            // titre se décale au survol et la cible bouge sous le curseur.
+            .padding(.trailing, 32)
+            .frame(height: 32)
+            .background(isSelected ? Color.latchSurfaceHigh : Color.latchBackground)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 12)
-        .frame(height: 32)
-        .background(isSelected ? Color.latchSurfaceHigh : Color.latchBackground)
-        .contentShape(Rectangle())
-        .onTapGesture { app.selectedTabID = session.id }
+        .buttonStyle(.plain)
+        // La croix est posée par-dessus plutôt qu'imbriquée : un bouton dans
+        // le label d'un autre bouton se laisse mal viser.
+        .overlay(alignment: .trailing) { closeButton }
         .onHover { isHovering = $0 }
     }
 
-    private var dotColor: Color {
-        switch session.connection {
-        case .connected: return .latchSuccess
-        case .degraded: return .latchAccent
-        case .connecting, .reconnecting: return .latchClaude
-        case .failed: return .latchAccent
-        case .idle: return .latchTextFaint
+    private var closeButton: some View {
+        Button {
+            app.close(tabID: session.id)
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .medium))
+                .foregroundStyle(Color.latchTextDim)
+                // Le dessin reste minuscule, la cible fait 26 points : viser
+                // une croix de huit pixels à la souris est un exercice.
+                .frame(width: 26, height: 32)
+                .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        // Invisible au repos, mais jamais inerte : une cible qui n'apparaît
+        // qu'au survol doit déjà être cliquable quand on l'atteint.
+        .opacity(isHovering || isSelected ? 1 : 0)
+        .padding(.trailing, 4)
     }
 }
