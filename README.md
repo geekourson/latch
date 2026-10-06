@@ -238,8 +238,29 @@ du terminal :
   la demande au premier lancement ; si elle a été refusée, il faut la
   réactiver à la main.
 - **Signature**. Latch est signée localement pendant le développement. Un `.app`
-  téléchargé et non notarisé demande un clic droit → **Ouvrir** au premier
-  lancement.
+  téléchargé et non notarisé est bloqué au premier lancement — voir
+  [Ouvrir une version non notarisée](#ouvrir-une-version-non-notarisée).
+
+### Ouvrir une version non notarisée
+
+Glissez d'abord `Latch.app` sur **Applications** : lancée depuis le disque
+monté, en lecture seule, elle ne saurait pas s'écrire.
+
+macOS affiche ensuite une alerte qui ne propose que **Terminer** ou **Déplacer
+vers la corbeille**. Choisissez *Terminer*, puis **Réglages Système →
+Confidentialité et sécurité**, descendez jusqu'à la section Sécurité, et
+cliquez **Ouvrir quand même**.
+
+> [!NOTE]
+> Jusqu'à macOS 14, un clic droit → *Ouvrir* suffisait. **Apple a supprimé ce
+> contournement dans macOS 15** : le menu contextuel ne propose plus rien, et
+> seul le passage par les Réglages Système fonctionne.
+
+En une ligne, si vous préférez le terminal :
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Latch.app
+```
 
 ## Configuration
 
@@ -326,8 +347,9 @@ d'état ; sans mosh nulle part, le panneau d'amélioration propose
 ## Distribution
 
 Les binaires publiés seront signés et notarisés, ce qui exige un compte
-développeur Apple (99 €/an). Sans notarisation, le premier lancement d'un `.app`
-téléchargé demande un clic droit → **Ouvrir** au lieu d'un double-clic.
+développeur Apple (99 €/an). Sans notarisation, macOS bloque le premier
+lancement d'un `.app` téléchargé : voir
+[Ouvrir une version non notarisée](#ouvrir-une-version-non-notarisée).
 
 ## Licence
 

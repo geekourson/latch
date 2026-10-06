@@ -63,7 +63,8 @@ jobs:
 
       # La signature et la notarisation exigent un compte développeur Apple
       # (99 €/an). Sans les secrets, la release sort non signée : le premier
-      # lancement demandera alors un clic droit → Ouvrir.
+      # lancement sera alors bloqué, et il faudra passer par les Réglages
+      # Système — le clic droit → Ouvrir ne marche plus depuis macOS 15.
       - name: Signer l'application
         id: sign
         if: steps.signing.outputs.available == 'true'
@@ -164,8 +165,19 @@ jobs:
           body: |
             ## Latch
 
-            `Latch.dmg` contient l'application. Si elle n'est pas notarisée, le
-            premier lancement demande un clic droit → **Ouvrir**.
+            `Latch.dmg` contient l'application. Glissez-la sur **Applications**.
+
+            Si elle n'est pas notarisée, macOS bloque le premier lancement avec
+            une alerte qui ne propose que *Terminer* ou *Déplacer vers la
+            corbeille*. Choisissez **Terminer**, puis **Réglages Système →
+            Confidentialité et sécurité → Ouvrir quand même**.
+
+            Le clic droit → *Ouvrir* d'autrefois ne fonctionne plus : Apple l'a
+            supprimé dans macOS 15. En une ligne :
+
+            ```
+            xattr -dr com.apple.quarantine /Applications/Latch.app
+            ```
 
             ### mosh embarqué et GPLv3
 
