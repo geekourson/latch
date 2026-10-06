@@ -10,9 +10,26 @@ import Foundation
 // MARK: - Raccourci
 
 struct Shortcut: Codable, Identifiable, Equatable {
+    /// Ce que l'ancienne valeur par défaut valait : un nom pré-rempli qui se
+    /// lit comme un libellé vide. On le traite comme tel plutôt que de
+    /// l'afficher à la place du vrai nom de session.
+    static let unnamed = "Nouvelle session"
+
     var id: UUID = UUID()
-    /// « API · Claude »
+    /// Un libellé libre, facultatif. « API · Claude ».
     var name: String
+
+    /// Le nom affiché partout : barre latérale, onglet, infobulle. Sans
+    /// libellé, c'est la session tmux — c'est elle qu'on reconnaît, et
+    /// afficher deux noms différents pour la même chose à deux endroits de
+    /// l'écran est ce qui rendait l'onglet incompréhensible.
+    var displayName: String {
+        let label = name.trimmingCharacters(in: .whitespaces)
+        guard !label.isEmpty, label != Shortcut.unnamed else {
+            return connection.tmuxSession
+        }
+        return label
+    }
     /// Commandes locales, l'ordre compte.
     var preflight: [Preflight] = []
     /// Exactement une, non supprimable.

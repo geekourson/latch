@@ -156,7 +156,7 @@ final class AppState: ObservableObject {
                 toolPaths: probe?.offPathTools ?? [:]
             )
             let session = TerminalSession(
-                name: shortcut.name,
+                name: shortcut.displayName,
                 command: plan.command,
                 shortcutID: shortcut.id,
                 host: shortcut.connection.host,
@@ -591,7 +591,9 @@ final class AppState: ObservableObject {
 
     func newShortcut(host: String = "") {
         editedShortcut = Shortcut(
-            name: "Nouvelle session",
+            // Vide, pour que l'invite du champ se voie. Un nom par défaut se
+            // lit comme un nom choisi, et finit affiché tel quel.
+            name: "",
             connection: Connection(
                 transport: host.isEmpty ? .local : .mosh,
                 host: host,
@@ -657,7 +659,7 @@ extension AppState: MCPHost {
             return "Aucun raccourci nommé « \(name) ». Raccourcis connus : \(known)."
         }
         await open(shortcut)
-        return "Onglet « \(shortcut.name) » ouvert."
+        return "Onglet « \(shortcut.displayName) » ouvert."
     }
 
     func mcpRunCommand(_ command: String, on host: String?, named name: String?) -> String {

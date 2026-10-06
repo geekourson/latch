@@ -455,3 +455,40 @@ final class PreviewEditTests: XCTestCase {
         XCTAssertEqual(PreviewEdit.decide(edited: preview, lastGenerated: preview), .ignore)
     }
 }
+
+/// Le nom affiché d'un raccourci.
+///
+/// Il y avait deux noms pour la même chose — un libellé libre et la session
+/// tmux — affichés à deux endroits différents de l'écran. Un raccourci créé
+/// puis nommé « session1 » apparaissait « session1 » dans la barre latérale et
+/// « Nouvelle session » dans son onglet.
+final class ShortcutDisplayNameTests: XCTestCase {
+
+    private func shortcut(name: String, session: String) -> Shortcut {
+        Shortcut(
+            name: name,
+            connection: Connection(transport: .local, host: "", tmuxSession: session)
+        )
+    }
+
+    func testALabelIsUsedWhenThereIsOne() {
+        XCTAssertEqual(shortcut(name: "API · Claude", session: "api").displayName, "API · Claude")
+    }
+
+    func testWithoutALabelTheTmuxSessionNamesIt() {
+        XCTAssertEqual(shortcut(name: "", session: "session1").displayName, "session1")
+        XCTAssertEqual(shortcut(name: "   ", session: "session1").displayName, "session1")
+    }
+
+    /// L'ancienne valeur par défaut était pré-remplie : elle se lit comme un
+    /// libellé vide, et les configurations existantes la portent encore.
+    func testTheOldDefaultCountsAsNoLabel() {
+        XCTAssertEqual(
+            shortcut(name: Shortcut.unnamed, session: "session1").displayName, "session1"
+        )
+    }
+
+    func testTheLabelIsTrimmedButKept() {
+        XCTAssertEqual(shortcut(name: "  prod  ", session: "api").displayName, "prod")
+    }
+}

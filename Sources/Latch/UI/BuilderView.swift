@@ -59,7 +59,7 @@ struct BuilderView: View {
 
     private var titleBar: some View {
         HStack(spacing: 10) {
-            TextField("Nom", text: $shortcut.name)
+            TextField(shortcut.connection.tmuxSession, text: $shortcut.name)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Color.latchText)
@@ -84,8 +84,9 @@ struct BuilderView: View {
     }
 
     private var isSaveable: Bool {
-        !shortcut.name.trimmingCharacters(in: .whitespaces).isEmpty
-            && (shortcut.isCustom || CommandBuilder.validate(shortcut).isEmpty)
+        // Le libellé est facultatif : sans lui, le raccourci porte le nom de
+        // sa session tmux, qui est déjà obligatoire et validé.
+        shortcut.isCustom || CommandBuilder.validate(shortcut).isEmpty
     }
 
     // MARK: - 1. Pré-vol

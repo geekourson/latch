@@ -193,7 +193,7 @@ private struct ShortcutRow: View {
             Task { await app.open(shortcut) }
         } label: {
             HStack(spacing: 6) {
-                Text(shortcut.connection.tmuxSession)
+                Text(shortcut.displayName)
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
 
@@ -223,7 +223,11 @@ private struct ShortcutRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(shortcut.name)
+        // L'infobulle porte ce que la ligne ne montre pas : la session tmux
+        // réelle, quand un libellé la remplace.
+        .help(shortcut.displayName == shortcut.connection.tmuxSession
+            ? shortcut.connection.host
+            : shortcut.connection.tmuxSession)
         .contextMenu {
             if isOpen {
                 Button("Nouvelle fenêtre") {
