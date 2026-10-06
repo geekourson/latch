@@ -140,16 +140,21 @@ L'échappement est la partie fragile, et elle est testée en faisant réellement
 traverser un `/bin/sh` aux commandes produites, avec de faux `tmux`, `ssh` et
 `mosh` qui impriment les arguments reçus.
 
-### Claude Code, vu depuis le Mac
+### Claude Code, sur le serveur comme sur le Mac
 
-Claude Code tourne **sur le serveur**, pas sur le Mac. Latch en suit l'activité
-par ses hooks : un petit script écrit chaque événement sur une ligne dans
-`~/.latch/events.jsonl`, qu'une connexion ssh secondaire suit en direct.
+Latch suit l'activité de Claude Code par ses hooks : un petit script écrit
+chaque événement sur une ligne dans `~/.latch/events.jsonl`, qu'une connexion
+ssh secondaire suit en direct. Sur le Mac, il n'y a pas de connexion — le
+journal est un fichier d'ici, et `tail -F` suffit. Rien dans ce mécanisme n'est
+propre à ssh : le hook écrit un fichier, le suivi lit un fichier, et
+l'installation n'écrit que dans le dossier personnel, sans `sudo`.
 
-La barre latérale et la barre d'état montrent alors si Claude est actif et quel
-fichier il est en train de toucher ; une notification et un rebond du Dock
-préviennent quand une tâche se termine ou qu'**une permission est attendue** —
-et rien d'autre, parce que chaque outil utilisé ne mérite pas d'interrompre.
+La barre latérale et la barre d'état montrent alors si Claude travaille et quel
+fichier il touche, et **quelle session** l'attend : les hooks ne connaissent
+qu'un `cwd`, qu'on rapproche du répertoire du panneau actif relevé par la boucle
+tmux. Une notification et un rebond du Dock préviennent quand une tâche se
+termine ou qu'**une permission est attendue** — et rien d'autre, parce que
+chaque outil utilisé ne mérite pas d'interrompre.
 
 L'installation se fait depuis le panneau d'amélioration, script visible avant
 exécution. Les hooks déjà présents dans `~/.claude/settings.json` sont
