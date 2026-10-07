@@ -64,10 +64,22 @@ final class TmuxInspectorTests: XCTestCase {
         let command = TmuxInspector.watchCommand(every: 5)
         XCTAssertTrue(command.contains("while :;"))
         XCTAssertTrue(command.contains("sleep 5"))
-        XCTAssertTrue(command.contains("tmux list-windows -a"))
+        XCTAssertTrue(command.contains("tmux -u list-windows -a"))
         // Toutes les sessions, pas seulement la courante.
         XCTAssertTrue(command.contains("#{session_name}"))
         XCTAssertTrue(command.contains("#{window_active}"))
+    }
+
+    /// Sans locale — le cas d'une app lancée depuis le Finder — tmux remplace
+    /// le séparateur par `_` si on ne lui dit pas que le client parle UTF-8.
+    func testEveryTmuxCallOfTheWatchCommandForcesUTF8() {
+        for tmux in ["tmux", "'/opt/homebrew/bin/tmux'"] {
+            let command = TmuxInspector.watchCommand(tmux: tmux)
+            let calls = command.components(separatedBy: "\(tmux) ").count - 1
+            let forced = command.components(separatedBy: "\(tmux) -u ").count - 1
+            XCTAssertEqual(calls, 3, command)
+            XCTAssertEqual(forced, calls, command)
+        }
     }
 
     /// La commande de bascule doit citer sa cible : un nom de session peut
@@ -460,8 +472,8 @@ final class LiveRepositoryTests: XCTestCase {
     /// lancée depuis le Finder ne mène nulle part.
     func testTheLocalWatchCommandUsesAnAbsoluteTmux() {
         let command = TmuxInspector.watchCommand(tmux: "'/opt/homebrew/bin/tmux'")
-        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' list-windows -a"), command)
-        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' list-panes -a"), command)
+        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' -u list-windows -a"), command)
+        XCTAssertTrue(command.contains("'/opt/homebrew/bin/tmux' -u list-panes -a"), command)
         XCTAssertFalse(command.contains("; tmux "), "aucun appel par le seul nom")
     }
 
@@ -469,7 +481,7 @@ final class LiveRepositoryTests: XCTestCase {
     /// et dépôts arrivent dans le même passage.
     func testTheWatchCommandAsksForBothInOneGo() {
         let command = TmuxInspector.watchCommand()
-        XCTAssertTrue(command.contains("tmux list-windows -a"))
+        XCTAssertTrue(command.contains("tmux -u list-windows -a"))
         XCTAssertTrue(command.contains("rev-parse --abbrev-ref HEAD"))
         XCTAssertTrue(command.contains("diff --shortstat"))
         // Le panneau actif de la fenêtre active, pas tous les panneaux.

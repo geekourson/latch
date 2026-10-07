@@ -183,7 +183,15 @@ final class TmuxInspector: ObservableObject {
     /// Le même passage relève les fenêtres et l'état git du panneau actif (§9.1) :
     /// deux questions posées au même endroit au même moment, autant ne pas
     /// ouvrir deux connexions pour ça.
+    ///
+    /// `-u` parce qu'une app lancée depuis le Finder n'a ni `LANG` ni `LC_*` :
+    /// tmux conclut alors que le client ne parle pas UTF-8 et remplace tout
+    /// caractère de contrôle de sa sortie par `_` — séparateur compris. Plus
+    /// aucune ligne ne se découpe, et la barre latérale reste vide sans rien
+    /// dire. Lancée depuis un terminal, l'app hérite de sa locale et tout
+    /// marche, d'où un bug qui ne se voit qu'au double-clic.
     nonisolated static func watchCommand(every seconds: Int = 3, tmux: String = "tmux") -> String {
+        let tmux = "\(tmux) -u"
         let format = [
             "#{session_name}", "#{window_index}", "#{window_name}",
             "#{window_active}", "#{pane_current_command}",
