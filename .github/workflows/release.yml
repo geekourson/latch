@@ -92,6 +92,27 @@ jobs:
             --sign "$MACOS_SIGNING_IDENTITY" "$APP"
           codesign --verify --strict --verbose=2 "$APP"
 
+      # Sans certificat, l'app sortait avec la seule signature que l'éditeur de
+      # liens pose sur l'exécutable : le bundle, lui, n'était « pas signé du
+      # tout », sans identifiant ni Info.plist scellé. macOS n'a alors rien
+      # pour reconnaître Latch d'une fois sur l'autre, et redemande l'accès à
+      # Documents, au Bureau ou aux données des autres apps à chaque session
+      # ouverte — c'est Latch qu'il tient pour responsable de ce que font
+      # tmux, le shell ou claude. Une signature ad hoc du bundle entier suffit
+      # à ce que l'accord tienne, jusqu'à la version suivante.
+      - name: Signer sans certificat
+        if: steps.signing.outputs.available != 'true'
+        run: |
+          set -euo pipefail
+          APP=build/Latch.xcarchive/Products/Applications/Latch.app
+          codesign --force --sign - "$APP/Contents/MacOS/mosh-client"
+          codesign --force --sign - "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+          # L'exécutable seul portait l'identifiant « Latch » ; scellé, le
+          # bundle prend celui de l'Info.plist.
+          codesign -dv "$APP" 2>&1 | grep -qx 'Identifier=app.latch.Latch' \
+            || { echo "::error::le bundle n'est pas scellé"; exit 1; }
+
       # Le disque se fabrique une fois, signé ou non : seule l'app diffère. Il
       # était empaqueté deux fois, une par branche, et les deux copies ont
       # divergé dès qu'il a fallu y ajouter quelque chose.
