@@ -23,6 +23,14 @@ struct LatchApp: App {
             CommandGroup(replacing: .newItem) {
                 Button(localized("Nouvelle session")) { app.newShortcut() }
                     .keyboardShortcut("n")
+                Button(localized("Nouvelle fenêtre")) { app.newWindowInSelectedSession() }
+                    .keyboardShortcut("t")
+            }
+            CommandGroup(after: .windowArrangement) {
+                Button(localized("Fenêtre suivante")) { app.selectAdjacentWindow(offset: 1) }
+                    .keyboardShortcut("]", modifiers: [.command, .shift])
+                Button(localized("Fenêtre précédente")) { app.selectAdjacentWindow(offset: -1) }
+                    .keyboardShortcut("[", modifiers: [.command, .shift])
             }
         }
 

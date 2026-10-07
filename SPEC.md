@@ -544,6 +544,13 @@ déjà utilisé ne produisait rien.
 Dans la barre latérale, une fenêtre se renomme, se ferme et se double sur place :
 tmux est la source de vérité, l'app n'en est que la télécommande.
 
+Ces gestes ne vivent pas que dans le menu contextuel, que personne ne trouve :
+au survol, la ligne d'une session montre un `+` qui y ajoute une fenêtre — en
+ouvrant la session d'abord si elle ne l'est pas — et chaque fenêtre une `×`
+qui la ferme. Un shell nu se ferme sans question ; dès que quelque chose y
+tourne, on confirme. Au clavier, ⌘T ajoute une fenêtre à la session au premier
+plan, ⇧⌘] et ⇧⌘[ passent à la suivante ou à la précédente.
+
 Le chemin qui rend la section utile est l'inverse de celui qu'on imagine : on
 crée la fenêtre quand on en a besoin — depuis la session, ou avec `Ctrl-b c` —
 puis « Ajouter au raccourci » la fait revenir aux prochaines connexions. On

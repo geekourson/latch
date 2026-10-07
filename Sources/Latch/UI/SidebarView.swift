@@ -180,6 +180,8 @@ private struct ShortcutRow: View {
     @EnvironmentObject private var app: AppState
     let shortcut: Shortcut
 
+    @State private var isHovering = false
+
     private var isOpen: Bool {
         app.tabs.contains { $0.shortcutID == shortcut.id }
     }
@@ -207,7 +209,22 @@ private struct ShortcutRow: View {
                 }
 
                 Spacer(minLength: 0)
-                if isOpen {
+
+                // Le `+` n'apparaît qu'au survol, comme la croix des onglets :
+                // au repos, la barre reste calme.
+                if isHovering {
+                    Button {
+                        app.newWindow(in: shortcut)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(Color.latchTextDim)
+                            .frame(width: 14, height: 14)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Nouvelle fenêtre")
+                } else if isOpen {
                     Circle()
                         .fill(Color.latchSuccess)
                         .frame(width: 4, height: 4)
@@ -228,16 +245,10 @@ private struct ShortcutRow: View {
         .help(shortcut.displayName == shortcut.connection.tmuxSession
             ? shortcut.connection.host
             : shortcut.connection.tmuxSession)
+        .onHover { isHovering = $0 }
         .contextMenu {
-            if isOpen {
-                Button("Nouvelle fenêtre") {
-                    app.newWindow(
-                        inSession: shortcut.connection.tmuxSession,
-                        on: shortcut.connection.host
-                    )
-                }
-                Divider()
-            }
+            Button("Nouvelle fenêtre") { app.newWindow(in: shortcut) }
+            Divider()
             Button("Modifier…") { app.editedShortcut = shortcut }
             Button("Supprimer", role: .destructive) {
                 app.store.remove(shortcutID: shortcut.id)
@@ -257,6 +268,7 @@ private struct WindowRow: View {
     @State private var isRenaming = false
     @State private var newName = ""
     @State private var confirmsClosing = false
+    @State private var isHovering = false
 
     var body: some View {
         Group {
@@ -282,7 +294,7 @@ private struct WindowRow: View {
                 Button("Ajouter au raccourci…") { app.rememberWindow(window, on: host) }
             }
             Divider()
-            Button("Fermer la fenêtre…", role: .destructive) { confirmsClosing = true }
+            Button("Fermer la fenêtre…", role: .destructive, action: requestClose)
         }
         .confirmationDialog(
             "Fermer la fenêtre « \(window.name) » ?",
@@ -314,7 +326,17 @@ private struct WindowRow: View {
                     .lineLimit(1)
                     .layoutPriority(1)
                 Spacer(minLength: 4)
-                if let command = window.currentCommand, command != window.name {
+                if isHovering {
+                    Button(action: requestClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(Color.latchTextDim)
+                            .frame(width: 14, height: 14)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fermer la fenêtre")
+                } else if let command = window.currentCommand, command != window.name {
                     Text(command)
                         .foregroundStyle(Color.latchTextFaint)
                         .lineLimit(1)
@@ -333,11 +355,23 @@ private struct WindowRow: View {
                 .fill(window.isActive ? Color.latchSurface : .clear)
         )
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
     }
 
     private func commitRename() {
         app.renameWindow(window, to: newName, on: host)
         isRenaming = false
+    }
+
+    /// Un shell nu se ferme sans question : il n'y a rien à perdre, et
+    /// demander à chaque fois rendrait la croix pénible. Dès que quelque chose
+    /// tourne — `claude`, `vim`, un build — on confirme.
+    private func requestClose() {
+        if window.isIdleShell {
+            app.closeWindow(window, on: host)
+        } else {
+            confirmsClosing = true
+        }
     }
 }
 

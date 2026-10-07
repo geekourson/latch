@@ -18,6 +18,9 @@
 "Nouvelle fenêtre ici" = "New window here";
 "Ajouter au raccourci…" = "Add to shortcut…";
 "Fermer la fenêtre…" = "Close window…";
+"Fermer la fenêtre" = "Close window";
+"Fenêtre suivante" = "Next window";
+"Fenêtre précédente" = "Previous window";
 "Fermer" = "Close";
 "Créer un raccourci ici" = "Create a shortcut here";
 "Fermer la session…" = "Close session…";

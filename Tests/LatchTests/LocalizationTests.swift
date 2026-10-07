@@ -44,6 +44,7 @@ final class LocalizationTests: XCTestCase {
             // Barre latérale
             "Nouvelle session", "Aucun serveur", "Sonder à nouveau", "Améliorer cet hôte…",
             "Retirer ce serveur…", "Renommer…", "Nouvelle fenêtre", "Ajouter au raccourci…",
+            "Fermer la fenêtre", "Fenêtre suivante", "Fenêtre précédente",
             "Créer un raccourci ici", "Fermer la session…",
             // Terminal et barre d'état
             "aucune session", "Réessayer", "D'accord",

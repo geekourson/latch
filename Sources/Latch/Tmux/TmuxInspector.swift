@@ -28,6 +28,12 @@ struct LiveWindow: Identifiable, Equatable {
 
     /// La cible que comprend `tmux select-window -t`.
     var target: String { "\(session):\(index)" }
+
+    /// Un shell nu au premier plan : rien qui tourne, rien à perdre en
+    /// fermant, et rien à rejouer à la reconnexion.
+    var isIdleShell: Bool {
+        ["bash", "zsh", "sh", "fish", "-bash", "-zsh"].contains(currentCommand ?? "")
+    }
 }
 
 /// Ce que la barre latérale peut décider elle-même, sans attendre le serveur.

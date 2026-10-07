@@ -345,8 +345,7 @@ final class AppState: ObservableObject {
 
         // Un shell nu n'est pas une commande à rejouer : on laisse le champ
         // vide plutôt que d'inscrire « bash ».
-        let shells = ["bash", "zsh", "sh", "fish", "-bash", "-zsh"]
-        let command = shells.contains(window.currentCommand ?? "") ? "" : (window.currentCommand ?? "")
+        let command = window.isIdleShell ? "" : (window.currentCommand ?? "")
 
         shortcut.windows.append(TmuxWindow(name: window.name, command: command))
         editedShortcut = shortcut
@@ -360,7 +359,59 @@ final class AppState: ObservableObject {
     }
 
     func newWindow(inSession session: String, on host: String) {
+        focusTab(session: session, on: host)
         inspectors[host]?.newWindow(inSession: session)
+    }
+
+    /// Le `+` de la barre latérale. Une session fermée n'existe peut-être pas
+    /// encore sur l'hôte : on l'ouvre d'abord, et la fenêtre ne part qu'une
+    /// fois la session vue — un `new-window` vers rien échoue en silence.
+    func newWindow(in shortcut: Shortcut) {
+        let host = shortcut.connection.host
+        let session = shortcut.connection.tmuxSession
+        guard tab(forSession: session, on: host) == nil else {
+            newWindow(inSession: session, on: host)
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            await self.open(shortcut)
+            for _ in 0..<10 {
+                if self.inspectors[host]?.windows[session] != nil {
+                    self.newWindow(inSession: session, on: host)
+                    return
+                }
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    /// La session tmux de l'onglet au premier plan, pour les raccourcis
+    /// clavier qui agissent sur ses fenêtres.
+    private var selectedSession: (host: String, session: String)? {
+        guard let tab = selectedTab, let id = tab.shortcutID,
+              let shortcut = store.shortcut(id: id)
+        else { return nil }
+        return (tab.host, shortcut.connection.tmuxSession)
+    }
+
+    /// ⌘T : une fenêtre de plus dans la session au premier plan.
+    func newWindowInSelectedSession() {
+        guard let current = selectedSession else { return }
+        newWindow(inSession: current.session, on: current.host)
+    }
+
+    /// ⇧⌘] et ⇧⌘[ : passer d'une fenêtre à l'autre sans la souris, en
+    /// bouclant aux extrémités.
+    func selectAdjacentWindow(offset: Int) {
+        guard let current = selectedSession else { return }
+        let windows = liveWindows(on: current.host, session: current.session)
+        guard windows.count > 1,
+              let active = windows.firstIndex(where: \.isActive)
+        else { return }
+        let next = (active + offset + windows.count) % windows.count
+        inspectors[current.host]?.select(windows[next])
     }
 
     func closeWindow(_ window: LiveWindow, on host: String) {
