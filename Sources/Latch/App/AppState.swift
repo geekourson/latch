@@ -407,11 +407,8 @@ final class AppState: ObservableObject {
     func selectAdjacentWindow(offset: Int) {
         guard let current = selectedSession else { return }
         let windows = liveWindows(on: current.host, session: current.session)
-        guard windows.count > 1,
-              let active = windows.firstIndex(where: \.isActive)
-        else { return }
-        let next = (active + offset + windows.count) % windows.count
-        inspectors[current.host]?.select(windows[next])
+        guard let next = TmuxOptimism.neighbour(in: windows, offset: offset) else { return }
+        inspectors[current.host]?.select(next)
     }
 
     func closeWindow(_ window: LiveWindow, on host: String) {

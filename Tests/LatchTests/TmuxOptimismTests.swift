@@ -92,4 +92,71 @@ final class TmuxOptimismTests: XCTestCase {
         let result = TmuxOptimism.removing(id: "api:0", from: windows(active: 0))
         XCTAssertTrue(result.allSatisfy { !$0.isActive })
     }
+
+    // MARK: - La fenêtre voisine
+
+    /// ⇧⌘] et ⇧⌘[ bouclent : depuis la dernière on revient à la première, et
+    /// inversement. Le modulo de Swift garde le signe du dividende, donc
+    /// reculer depuis la première est le cas qui casse si on l'oublie.
+    func testTheNeighbourWrapsAtBothEnds() {
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 0), offset: 1)?.index, 1)
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 2), offset: 1)?.index, 0)
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 0), offset: -1)?.index, 2)
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 1), offset: -1)?.index, 0)
+    }
+
+    /// Une session d'une seule fenêtre n'a pas de voisine : il ne faut pas
+    /// renvoyer l'active, ce qui enverrait un `select-window` pour rien.
+    func testASingleWindowHasNoNeighbour() {
+        let alone = [LiveWindow(session: "api", index: 0, name: "w", isActive: true)]
+        XCTAssertNil(TmuxOptimism.neighbour(in: alone, offset: 1))
+        XCTAssertNil(TmuxOptimism.neighbour(in: [], offset: 1))
+    }
+
+    /// Sans fenêtre active — un lot arrivé entre deux tours — on ne devine pas.
+    func testWithoutAnActiveWindowThereIsNothingToLeaveFrom() {
+        let none = [0, 1].map {
+            LiveWindow(session: "api", index: $0, name: "w\($0)", isActive: false)
+        }
+        XCTAssertNil(TmuxOptimism.neighbour(in: none, offset: 1))
+    }
+
+    func testAZeroOffsetMovesNothing() {
+        XCTAssertNil(TmuxOptimism.neighbour(in: windows(active: 1), offset: 0))
+    }
+
+    /// Un saut plus grand que la liste reste dans la liste.
+    func testALargeOffsetStaysInRange() {
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 0), offset: 4)?.index, 1)
+        XCTAssertEqual(TmuxOptimism.neighbour(in: windows(active: 0), offset: -4)?.index, 2)
+    }
+
+    // MARK: - Un shell nu
+
+    /// Ce qui distingue une fenêtre qu'on ferme sans demander de celle où
+    /// quelque chose tourne.
+    func testAnIdleShellIsRecognised() {
+        for shell in ["bash", "zsh", "sh", "fish", "-bash", "-zsh"] {
+            let window = LiveWindow(
+                session: "api", index: 0, name: "w", isActive: true, currentCommand: shell
+            )
+            XCTAssertTrue(window.isIdleShell, shell)
+        }
+    }
+
+    func testSomethingRunningIsNotAnIdleShell() {
+        for command in ["claude", "vim", "journalctl", "node", "bash -c make"] {
+            let window = LiveWindow(
+                session: "api", index: 0, name: "w", isActive: true, currentCommand: command
+            )
+            XCTAssertFalse(window.isIdleShell, command)
+        }
+    }
+
+    /// Une fenêtre dont on ne sait rien n'est pas réputée vide : on confirme
+    /// plutôt que de fermer ce qu'on n'a pas vu.
+    func testAnUnknownCommandIsNotTreatedAsIdle() {
+        let window = LiveWindow(session: "api", index: 0, name: "w", isActive: true)
+        XCTAssertFalse(window.isIdleShell)
+    }
 }

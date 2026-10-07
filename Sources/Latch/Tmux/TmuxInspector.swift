@@ -69,6 +69,21 @@ enum TmuxOptimism {
     static func removing(id: String, from windows: [LiveWindow]) -> [LiveWindow] {
         windows.filter { $0.id != id }
     }
+
+    /// La fenêtre voisine de l'active, en bouclant aux extrémités.
+    ///
+    /// L'arithmétique vit ici plutôt que dans `AppState` pour être vérifiable :
+    /// `liveWindows` n'est pas inscriptible de l'extérieur, et un décalage
+    /// circulaire est exactement le genre d'endroit où un écart d'un se cache.
+    static func neighbour(in windows: [LiveWindow], offset: Int) -> LiveWindow? {
+        guard windows.count > 1, offset != 0,
+              let active = windows.firstIndex(where: \.isActive)
+        else { return nil }
+        // Le modulo de Swift garde le signe du dividende : il faut ramener
+        // dans les positifs avant, sinon reculer depuis la première échoue.
+        let count = windows.count
+        return windows[((active + offset) % count + count) % count]
+    }
 }
 
 /// Une session telle que tmux la connaît, avec de quoi juger si on l'a oubliée.
