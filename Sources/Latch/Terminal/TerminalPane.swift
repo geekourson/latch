@@ -141,7 +141,7 @@ final class PaddedTerminalView: NSView {
 
     init(inset: CGFloat) {
         self.inset = inset
-        self.terminalView = TerminalView(frame: .zero)
+        self.terminalView = SelectableTerminalView(frame: .zero)
         super.init(frame: .zero)
 
         wantsLayer = true
@@ -158,7 +158,20 @@ final class PaddedTerminalView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    /// La marge appartient au terminal : une sélection qui y commence ne doit
+    /// pas emporter la fenêtre.
+    override var mouseDownCanMoveWindow: Bool { false }
+
     override func becomeFirstResponder() -> Bool {
         window?.makeFirstResponder(terminalView) ?? false
     }
+}
+
+/// La fenêtre se déplace par son fond (`isMovableByWindowBackground`), et une
+/// vue non opaque compte comme du fond : c'est la valeur par défaut d'AppKit.
+/// Le terminal l'est — sa couleur peut être translucide — si bien qu'un
+/// cliquer-glisser pour sélectionner du texte déplaçait la fenêtre au lieu de
+/// sélectionner. Il se déclare donc contenu, jamais fond.
+final class SelectableTerminalView: TerminalView {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
