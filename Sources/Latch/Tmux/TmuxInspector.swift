@@ -495,6 +495,15 @@ final class TmuxInspector: ObservableObject {
         run(["rename-window", "-t", window.target, name])
     }
 
+    /// Sans souris, tmux laisse le terminal traduire la molette en flèches :
+    /// elle remonte l'historique du shell au lieu de faire défiler l'écran.
+    /// Avec, tmux la prend et passe en mode copie. L'option est posée sur la
+    /// session seule, pas sur le serveur : les autres sessions de l'hôte, et
+    /// leurs autres terminaux, ne changent pas.
+    func enableMouse(inSession session: String) {
+        run(["set-option", "-t", session, "mouse", "on"])
+    }
+
     func newWindow(inSession session: String) {
         run(["new-window", "-t", session + ":"])
     }

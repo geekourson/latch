@@ -168,7 +168,7 @@ final class AppState: ObservableObject {
             tabs.append(session)
             selectedTabID = session.id
             followHooks(on: shortcut.connection.host)
-            reconcileWindows(of: shortcut)
+            prepareSession(of: shortcut)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -302,10 +302,15 @@ final class AppState: ObservableObject {
         (liveWindows[host]?[session] ?? []).sorted { $0.index < $1.index }
     }
 
-    /// Crée les fenêtres déclarées qui manquent encore. Attend d'avoir vu la
-    /// session : l'inspecteur met un tour de boucle à la découvrir.
-    private func reconcileWindows(of shortcut: Shortcut) {
-        guard !shortcut.windows.isEmpty else { return }
+    /// Active la souris de tmux, pour que la molette fasse défiler, et crée
+    /// les fenêtres déclarées qui manquent encore. Attend d'avoir vu la
+    /// session : l'inspecteur met un tour de boucle à la découvrir, et une
+    /// commande vers une session absente échoue en silence.
+    ///
+    /// En mode contrôle, c'est l'émulateur qui gère la souris, pas tmux.
+    private func prepareSession(of shortcut: Shortcut) {
+        let wantsMouse = !shortcut.connection.controlMode
+        guard wantsMouse || !shortcut.windows.isEmpty else { return }
         let host = shortcut.connection.host
         let session = shortcut.connection.tmuxSession
 
@@ -314,6 +319,7 @@ final class AppState: ObservableObject {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, let inspector = self.inspectors[host] else { return }
                 if inspector.windows[session] != nil {
+                    if wantsMouse { inspector.enableMouse(inSession: session) }
                     inspector.reconcile(shortcut.windows, inSession: session)
                     return
                 }

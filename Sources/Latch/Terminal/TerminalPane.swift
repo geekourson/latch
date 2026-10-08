@@ -172,6 +172,22 @@ final class PaddedTerminalView: NSView {
 /// Le terminal l'est — sa couleur peut être translucide — si bien qu'un
 /// cliquer-glisser pour sélectionner du texte déplaçait la fenêtre au lieu de
 /// sélectionner. Il se déclare donc contenu, jamais fond.
+///
+/// Latch active la souris de tmux pour que la molette fasse défiler son
+/// historique (voir `AppState.prepareSession`). tmux réclamerait alors aussi le
+/// cliquer-glisser, et la sélection passerait dans son tampon au lieu du
+/// presse-papiers. Le bouton gauche reste donc au terminal : la souris n'est
+/// rapportée à tmux qu'en dehors d'un clic — la molette, en somme.
 final class SelectableTerminalView: TerminalView {
     override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        allowMouseReporting = false
+        super.mouseDown(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        allowMouseReporting = true
+    }
 }
