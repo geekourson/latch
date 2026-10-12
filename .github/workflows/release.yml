@@ -173,9 +173,19 @@ jobs:
             --wait
           xcrun stapler staple build/Latch.dmg
 
+      # Lancé à la main, sans tag, le workflow sert à essayer la signature : le
+      # disque reste un artefact du run, à télécharger et lancer, sans release.
+      - name: Garder le disque
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Latch-dmg
+          path: build/Latch.dmg
+
       # GPLv3 : le binaire mosh embarqué voyage avec ses sources et le script
       # exact qui l'a produit.
       - name: Publier
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
