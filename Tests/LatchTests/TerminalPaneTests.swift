@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import SwiftTerm
 import XCTest
 
 @testable import Latch
@@ -42,4 +43,46 @@ final class TerminalPaneTests: XCTestCase {
         terminal.mouseUp(with: try event(.leftMouseUp))
         XCTAssertTrue(terminal.allowMouseReporting, "la molette doit revenir à tmux")
     }
+
+    /// ⌘⌫ efface la ligne comme dans Terminal : le shell reçoit ^U.
+    func testCommandDeleteErasesTheLine() throws {
+        let pane = PaddedTerminalView(inset: 0)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+            styleMask: [.titled], backing: .buffered, defer: true
+        )
+        window.contentView = pane
+        let terminal = pane.terminalView
+        XCTAssertTrue(window.makeFirstResponder(terminal))
+        let spy = SentBytes()
+        terminal.terminalDelegate = spy
+
+        func key(_ flags: NSEvent.ModifierFlags) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}",
+                isARepeat: false, keyCode: 51
+            ))
+        }
+
+        XCTAssertTrue(terminal.performKeyEquivalent(with: try key(.command)))
+        XCTAssertEqual(spy.bytes, [0x15])
+        XCTAssertFalse(terminal.performKeyEquivalent(with: try key([.command, .option])))
+        XCTAssertEqual(spy.bytes, [0x15], "⌘⌥⌫ n'est pas concerné")
+    }
+}
+
+private final class SentBytes: TerminalViewDelegate {
+    var bytes: [UInt8] = []
+
+    func send(source: TerminalView, data: ArraySlice<UInt8>) { bytes += data }
+    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+    func setTerminalTitle(source: TerminalView, title: String) {}
+    func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+    func scrolled(source: TerminalView, position: Double) {}
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {}
+    func bell(source: TerminalView) {}
+    func clipboardCopy(source: TerminalView, content: Data) {}
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 }

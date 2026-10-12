@@ -190,4 +190,25 @@ final class SelectableTerminalView: TerminalView {
         super.mouseUp(with: event)
         allowMouseReporting = true
     }
+
+    /// ⌘⌫ efface la ligne, comme dans Terminal : AppKit le traduit en
+    /// `deleteToBeginningOfLine:`, que SwiftTerm ignore. On envoie donc ^U,
+    /// que le shell, readline et l'éditeur de ligne de zsh comprennent tous.
+    /// `keyDown` n'étant pas surchargeable, la touche est prise au passage des
+    /// équivalents clavier, qui précède le menu.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown,
+              window?.firstResponder === self,
+              Self.deletesLine(event) else {
+            return super.performKeyEquivalent(with: event)
+        }
+        send([0x15])
+        return true
+    }
+
+    /// ⌘⌫ seul : ⌘⌥⌫ ou ⌘⇧⌫ gardent leur sens.
+    static func deletesLine(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        return modifiers == .command && event.keyCode == 51 // kVK_Delete
+    }
 }
