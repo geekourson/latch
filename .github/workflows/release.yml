@@ -203,19 +203,8 @@ jobs:
           body: |
             ## Latch
 
-            `Latch.dmg` contient l'application. Glissez-la sur **Applications**.
-
-            Si elle n'est pas notarisée, macOS bloque le premier lancement avec
-            une alerte qui ne propose que *Terminer* ou *Déplacer vers la
-            corbeille*. Choisissez **Terminer**, puis **Réglages Système →
-            Confidentialité et sécurité → Ouvrir quand même**.
-
-            Le clic droit → *Ouvrir* d'autrefois ne fonctionne plus : Apple l'a
-            supprimé dans macOS 15. En une ligne :
-
-            ```
-            xattr -dr com.apple.quarantine /Applications/Latch.app
-            ```
+            `Latch.dmg` contient l'application, signée et notarisée par Apple.
+            Glissez-la sur **Applications**, puis lancez-la.
 
             ### mosh embarqué et GPLv3
 

@@ -38,7 +38,6 @@ développement est dit plus bas, nommément.
 | **Un seul serveur** | Tout a été validé contre un hôte Debian. La sonde prétend reconnaître six familles de distributions ; **cinq n'ont jamais été exercées**. |
 | **La reconnexion au réveil** | Le code et ses tests existent, le scénario complet — capot fermé, réseau perdu, retour — n'a jamais été observé de bout en bout. |
 | **Le MCP piloté par Claude Code** | Le serveur a été exercé à la main. Le chemin réel, Claude Code sur le serveur appelant Latch par le tunnel, reste à voir tourner. |
-| **La distribution** | Aucune release n'a été produite : signature et notarisation exigent un compte développeur Apple. Le workflow existe, il n'a jamais été joué. |
 | **Le glisser-déposer** | Réordonner les étapes de pré-vol et les fenêtres fonctionne en théorie, jamais essayé sérieusement. |
 
 Rien de tout cela n'est cassé à ma connaissance. C'est simplement non vérifié,
@@ -237,13 +236,13 @@ du terminal :
   `ssh: connect to host 192.168.1.10 port 22: No route to host`. macOS propose
   la demande au premier lancement ; si elle a été refusée, il faut la
   réactiver à la main.
-- **Signature**. Latch est signée localement pendant le développement. Un `.app`
-  téléchargé et non notarisé est bloqué au premier lancement — voir
-  [Ouvrir une version non notarisée](#ouvrir-une-version-non-notarisée).
+- **Signature**. Les releases sont signées et notarisées depuis la v0.12.1 :
+  elles s'ouvrent sans détour. Une compilation locale est signée localement,
+  et n'est pas bloquée sur la machine qui l'a produite.
 
 ### Ouvrir une version non notarisée
 
-Glissez d'abord `Latch.app` sur **Applications** : lancée depuis le disque
+Les releases antérieures à la v0.12.1 ne sont pas notarisées. Glissez d'abord `Latch.app` sur **Applications** : lancée depuis le disque
 monté, en lecture seule, elle ne saurait pas s'écrire.
 
 macOS affiche ensuite une alerte qui ne propose que **Terminer** ou **Déplacer
@@ -346,10 +345,16 @@ d'état ; sans mosh nulle part, le panneau d'amélioration propose
 
 ## Distribution
 
-Les binaires publiés seront signés et notarisés, ce qui exige un compte
-développeur Apple (99 €/an). Sans notarisation, macOS bloque le premier
-lancement d'un `.app` téléchargé : voir
-[Ouvrir une version non notarisée](#ouvrir-une-version-non-notarisée).
+Depuis la v0.12.1, les releases sont signées avec un certificat Developer ID
+et notarisées par Apple, ticket agrafé au `.dmg` : macOS les ouvre sans alerte,
+et les autorisations accordées à Latch tiennent d'une version à l'autre.
+
+Le workflow de release le fait dès que ses six secrets sont présents
+(`MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_SIGNING_IDENTITY`,
+`NOTARY_APPLE_ID`, `NOTARY_PASSWORD`, `NOTARY_TEAM_ID`) ; sans eux, il sort une
+version signée ad hoc. Lancé à la main sans tag, il garde le `.dmg` comme
+artefact du run au lieu de publier : de quoi essayer une signature avant une
+vraie version.
 
 ## Licence
 
