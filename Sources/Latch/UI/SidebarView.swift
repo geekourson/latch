@@ -325,6 +325,10 @@ private struct WindowRow: View {
                     .foregroundStyle(window.isActive ? Color.latchText : Color.latchTextDim)
                     .lineLimit(1)
                     .layoutPriority(1)
+                // Le témoin le plus précis : celui du Claude de cette fenêtre.
+                if let activity = app.claudeActivity(in: window, on: host) {
+                    ClaudeDot(activity: activity)
+                }
                 Spacer(minLength: 4)
                 if isHovering {
                     Button(action: requestClose) {
@@ -469,6 +473,11 @@ private struct LocalSectionHeader: View {
             }
         }
         .padding(.vertical, 4)
+        // Le panneau sert aussi quand rien ne manque : c'est là que
+        // s'installent les hooks de Claude Code.
+        .contextMenu {
+            Button("Améliorer ce Mac…") { app.upgradingTarget = .localMac }
+        }
     }
 }
 

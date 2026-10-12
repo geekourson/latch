@@ -9,6 +9,7 @@
 "local" = "local";
 "Sonder à nouveau" = "Probe again";
 "Améliorer cet hôte…" = "Upgrade this host…";
+"Améliorer ce Mac…" = "Upgrade this Mac…";
 "Retirer ce serveur…" = "Remove this server…";
 "Retirer le serveur seul" = "Remove the server only";
 "Modifier…" = "Edit…";

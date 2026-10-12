@@ -27,7 +27,8 @@ final class HookStream: ObservableObject {
     /// y compris mosh, qui n'est pas du ssh.
     var remoteForward: String?
 
-    @Published private(set) var activity = ClaudeActivity()
+    /// Une entrée par session Claude : un hôte peut en faire tourner plusieurs.
+    @Published private(set) var roster = ClaudeRoster()
     /// Vrai quand la connexion secondaire tient. Faux ne veut pas dire que la
     /// session principale est tombée.
     @Published private(set) var isFollowing = false
@@ -157,7 +158,7 @@ final class HookStream: ObservableObject {
             guard let event = HookEvent.parse(line: String(decoding: line, as: UTF8.self)) else {
                 continue
             }
-            activity.apply(event)
+            roster.apply(event)
             onEvent?(event)
         }
 

@@ -182,6 +182,7 @@ final class HookInstallerTests: XCTestCase {
         }
         XCTAssertTrue(HookInstaller.events.contains("Stop"))
         XCTAssertTrue(HookInstaller.events.contains("Notification"))
+        XCTAssertTrue(HookInstaller.events.contains("UserPromptSubmit"))
     }
 
     /// Un hook qui échoue interrompt Claude Code : celui-ci sort toujours à 0.
@@ -218,7 +219,18 @@ final class HookInstallerTests: XCTestCase {
 
     /// On fait tourner le hook comme Claude Code le ferait : une charge JSON
     /// sur l'entrée standard, et on regarde le journal.
-    func testHookWritesOneLinePerEvent() throws {
+    /// Une charge sur plusieurs lignes, comme un JSON indenté le serait.
+    private let payload = """
+        {
+          "hook_event_name": "PreToolUse",
+          "tool_name": "Edit",
+          "tool_input": {"file_path": "/srv/a.py"}
+        }
+        """
+
+    /// Fait tourner le hook une fois par charge, avec un `HOME` de test, et
+    /// rend les lignes du journal.
+    private func runHook(times: Int = 1, environment: [String: String] = [:]) throws -> [String] {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("latch-hook-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
@@ -230,20 +242,12 @@ final class HookInstallerTests: XCTestCase {
             [.posixPermissions: 0o755], ofItemAtPath: hookURL.path
         )
 
-        // Une charge sur plusieurs lignes, comme un JSON indenté le serait.
-        let payload = """
-            {
-              "hook_event_name": "PreToolUse",
-              "tool_name": "Edit",
-              "tool_input": {"file_path": "/srv/a.py"}
-            }
-            """
-
-        for _ in 0..<2 {
+        for _ in 0..<times {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/sh")
             process.arguments = [hookURL.path]
             process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin"]
+                .merging(environment) { _, new in new }
 
             let input = Pipe()
             process.standardInput = input
@@ -258,16 +262,104 @@ final class HookInstallerTests: XCTestCase {
         let log = try String(
             contentsOf: home.appendingPathComponent(".latch/events.jsonl"), encoding: .utf8
         )
-        let lines = log.split(separator: "\n")
+        return log.split(separator: "\n", omittingEmptySubsequences: false)
+            .dropLast().map(String.init)
+    }
+
+    func testHookWritesOneLinePerEvent() throws {
+        let lines = try runHook(times: 2)
         XCTAssertEqual(lines.count, 2, "une ligne par événement, quoi qu'il arrive à la charge")
 
-        let event = try XCTUnwrap(HookEvent.parse(line: String(lines[0])))
+        let event = try XCTUnwrap(HookEvent.parse(line: lines[0]))
         XCTAssertEqual(event.kind, .preToolUse)
         XCTAssertEqual(event.filePath, "/srv/a.py")
+        XCTAssertNil(event.pane, "hors de tmux, pas de panneau")
+    }
+
+    /// Dans tmux, le hook dit dans quel panneau tourne Claude : c'est ce qui
+    /// place le témoin sur la bonne fenêtre.
+    func testHookAddsTheTmuxPane() throws {
+        let lines = try runHook(environment: ["TMUX_PANE": "%12"])
+        XCTAssertEqual(lines.count, 1)
+        let event = try XCTUnwrap(HookEvent.parse(line: lines[0]))
+        XCTAssertEqual(event.pane, "%12")
+        XCTAssertEqual(event.filePath, "/srv/a.py", "le reste de la charge est intact")
+    }
+
+    /// Le panneau entre tel quel dans le JSON : rien d'autre qu'un `%12` n'y
+    /// a sa place.
+    func testHookIgnoresAnOddPane() throws {
+        let lines = try runHook(environment: ["TMUX_PANE": #"%1","x":"y"#])
+        let event = try XCTUnwrap(HookEvent.parse(line: lines[0]))
+        XCTAssertNil(event.pane)
+        XCTAssertEqual(event.kind, .preToolUse)
     }
 }
 
 // MARK: - Le script de fusion, exécuté pour de vrai
+
+// MARK: - Plusieurs Claude sur un hôte
+
+final class ClaudeRosterTests: XCTestCase {
+
+    private func event(_ json: String) throws -> HookEvent {
+        try XCTUnwrap(HookEvent.parse(line: json))
+    }
+
+    /// `%1` et `%2` dans la fenêtre 0 de « api », `%3` dans la fenêtre 1.
+    private let panes = ["%1": "api:0", "%2": "api:0", "%3": "api:1"]
+
+    /// Deux Claude sur le même hôte : chacun garde son état, et chacun le
+    /// montre sur sa fenêtre.
+    func testEachWindowShowsItsOwnClaude() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"a","latch_pane":"%1"}"#))
+        roster.apply(try event(#"{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"b","latch_pane":"%3"}"#))
+
+        XCTAssertEqual(roster.activity(inWindow: "api:0", panes: panes)?.attention, .reply)
+        XCTAssertNotNil(roster.activity(inWindow: "api:1", panes: panes))
+        XCTAssertNil(roster.activity(inWindow: "api:1", panes: panes)?.attention,
+                     "le travail de l'un n'efface pas l'attente de l'autre, et inversement")
+        XCTAssertNil(roster.activity(inWindow: "api:2", panes: panes))
+    }
+
+    /// La session résume ses fenêtres par ce qui presse le plus.
+    func testTheSessionShowsWhatPressesMost() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"a","latch_pane":"%1"}"#))
+        roster.apply(try event(#"{"hook_event_name":"Notification","notification_type":"permission_prompt","session_id":"b","latch_pane":"%3"}"#))
+        roster.apply(try event(#"{"hook_event_name":"PreToolUse","tool_name":"Bash","session_id":"c","latch_pane":"%2"}"#))
+
+        let session = roster.activity(inSession: "api", panes: panes, directory: nil)
+        XCTAssertEqual(session?.attention, .permission)
+        XCTAssertNil(roster.activity(inSession: "web", panes: panes, directory: nil))
+    }
+
+    /// Un hook d'avant le panneau se rattache encore par son répertoire.
+    func testAnOlderHookStillMatchesByDirectory() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"a","cwd":"/srv/api"}"#))
+
+        XCTAssertNotNil(roster.activity(inSession: "api", panes: panes, directory: "/srv/api"))
+        XCTAssertNil(roster.activity(inSession: "api", panes: panes, directory: "/srv/web"))
+        XCTAssertNil(roster.activity(inWindow: "api:0", panes: panes), "pas de fenêtre sans panneau")
+    }
+
+    /// Claude tué sans `SessionEnd` : son panneau a disparu, son témoin aussi.
+    func testAClaudeWhosePaneIsGoneIsForgotten() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"a","latch_pane":"%9"}"#))
+        XCTAssertTrue(roster.live(panes: panes).isEmpty)
+        XCTAssertEqual(roster.live(panes: nil).count, 1, "sans panneaux connus, on ne juge pas")
+    }
+
+    func testTheEndOfASessionRemovesIt() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"SessionStart","session_id":"a","latch_pane":"%1"}"#))
+        roster.apply(try event(#"{"hook_event_name":"SessionEnd","session_id":"a"}"#))
+        XCTAssertTrue(roster.activities.isEmpty)
+    }
+}
 
 final class HookMergeScriptTests: XCTestCase {
 
@@ -313,7 +405,7 @@ final class HookMergeScriptTests: XCTestCase {
 
     func testFirstRunInstallsEveryEvent() throws {
         let message = try runMerge()
-        XCTAssertTrue(message.contains("6 hooks installes"), message)
+        XCTAssertTrue(message.contains("7 hooks installes"), message)
 
         let hooks = try XCTUnwrap(settings()["hooks"] as? [String: Any])
         XCTAssertEqual(Set(hooks.keys), Set(HookInstaller.events))
@@ -346,7 +438,7 @@ final class HookMergeScriptTests: XCTestCase {
             .write(to: claude.appendingPathComponent("settings.json"), atomically: true, encoding: .utf8)
 
         let message = try runMerge()
-        XCTAssertTrue(message.contains("5 ajoutes"), message)
+        XCTAssertTrue(message.contains("6 ajoutes"), message)
         XCTAssertTrue(message.contains("1 deja"), message)
     }
 

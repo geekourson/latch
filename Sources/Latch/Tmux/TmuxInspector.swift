@@ -159,6 +159,11 @@ final class TmuxInspector: ObservableObject {
     /// Le répertoire du panneau actif de chaque session.
     @Published private(set) var directories: [String: String] = [:]
 
+    /// La fenêtre (`session:index`) de chaque panneau (`%12`). Un hook donne
+    /// le panneau où tourne Claude ; c'est ce qui le place dans une fenêtre.
+    /// `nil` tant que la boucle n'a rien rapporté.
+    @Published private(set) var panes: [String: String]?
+
     /// Les sélections décidées ici et pas encore confirmées par le serveur,
     /// avec l'instant du clic. Une réponse déjà en vol quand on a cliqué
     /// porte l'ancienne fenêtre active : sans ça, la sélection reviendrait en
@@ -176,6 +181,7 @@ final class TmuxInspector: ObservableObject {
     nonisolated static let gitPrefix = "LATCH_GIT"
     nonisolated static let pathPrefix = "LATCH_CWD"
     nonisolated static let sessionPrefix = "LATCH_SES"
+    nonisolated static let panePrefix = "LATCH_PANE"
 
     /// Une boucle côté serveur plutôt qu'un ssh par sondage : une connexion,
     /// tenue ouverte, qui réémet tout régulièrement.
@@ -202,8 +208,13 @@ final class TmuxInspector: ObservableObject {
             "#{session_attached}", "#{session_windows}",
         ].joined(separator: separator)
 
+        let paneFormat = [
+            "\(panePrefix)#{pane_id}", "#{session_name}", "#{window_index}",
+        ].joined(separator: separator)
+
         return "while :; do \(tmux) list-windows -a -F '\(format)' 2>/dev/null; "
             + "\(tmux) list-sessions -F '\(sessionFormat)' 2>/dev/null; "
+            + "\(tmux) list-panes -a -F '\(paneFormat)' 2>/dev/null; "
             + gitLoop(tmux: tmux) + "; echo '\(recordEnd)'; sleep \(seconds); done"
     }
 
@@ -234,6 +245,7 @@ final class TmuxInspector: ObservableObject {
     private var pendingRepositories: [String: LiveRepository] = [:]
     private var pendingSessions: [LiveSession] = []
     private var pendingDirectories: [String: String] = [:]
+    private var pendingPanes: [String: String] = [:]
     private var retryTask: Task<Void, Never>?
     private var attempt = 0
     private var isStopped = false
@@ -292,6 +304,7 @@ final class TmuxInspector: ObservableObject {
         repositories = [:]
         sessions = []
         directories = [:]
+        panes = nil
     }
 
     private func launch() {
@@ -354,6 +367,8 @@ final class TmuxInspector: ObservableObject {
         pending.removeAll()
         pendingRepositories.removeAll()
         pendingSessions.removeAll()
+        pendingDirectories.removeAll()
+        pendingPanes.removeAll()
         guard !isStopped else { return }
         scheduleRetry()
     }
@@ -390,10 +405,17 @@ final class TmuxInspector: ObservableObject {
             repositories = pendingRepositories
             sessions = pendingSessions.sorted { $0.name < $1.name }
             directories = pendingDirectories
+            panes = pendingPanes
             pending.removeAll()
             pendingRepositories.removeAll()
             pendingSessions.removeAll()
             pendingDirectories.removeAll()
+            pendingPanes.removeAll()
+            return
+        }
+
+        if trimmed.hasPrefix(Self.panePrefix) {
+            if let (pane, window) = Self.parse(paneLine: trimmed) { pendingPanes[pane] = window }
             return
         }
 
@@ -448,6 +470,14 @@ final class TmuxInspector: ObservableObject {
             result[session] = TmuxOptimism.selecting(index: pending.index, in: windows)
         }
         return result
+    }
+
+    /// `LATCH_PANE%12␟api␟0` → (`%12`, `api:0`), l'identifiant de `LiveWindow`.
+    nonisolated static func parse(paneLine line: String) -> (pane: String, window: String)? {
+        let fields = String(line.dropFirst(panePrefix.count)).components(separatedBy: separator)
+        guard fields.count >= 3, fields[0].hasPrefix("%"), Int(fields[2]) != nil
+        else { return nil }
+        return (fields[0], "\(fields[1]):\(fields[2])")
     }
 
     nonisolated static func parse(line: String) -> LiveWindow? {

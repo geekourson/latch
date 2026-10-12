@@ -77,9 +77,24 @@ final class TmuxInspectorTests: XCTestCase {
             let command = TmuxInspector.watchCommand(tmux: tmux)
             let calls = command.components(separatedBy: "\(tmux) ").count - 1
             let forced = command.components(separatedBy: "\(tmux) -u ").count - 1
-            XCTAssertEqual(calls, 3, command)
+            XCTAssertEqual(calls, 4, command)
             XCTAssertEqual(forced, calls, command)
         }
+    }
+
+    /// Chaque panneau dit à quelle fenêtre il appartient : c'est par lui que
+    /// le témoin de Claude trouve sa fenêtre.
+    func testAPaneLineNamesItsWindow() throws {
+        XCTAssertTrue(TmuxInspector.watchCommand().contains("#{pane_id}"))
+
+        let sep = TmuxInspector.separator
+        let line = "\(TmuxInspector.panePrefix)%12\(sep)mes notes\(sep)3"
+        let parsed = try XCTUnwrap(TmuxInspector.parse(paneLine: line))
+        XCTAssertEqual(parsed.pane, "%12")
+        XCTAssertEqual(parsed.window, "mes notes:3")
+        XCTAssertEqual(parsed.window, LiveWindow(session: "mes notes", index: 3, name: "x", isActive: false).id)
+
+        XCTAssertNil(TmuxInspector.parse(paneLine: "\(TmuxInspector.panePrefix)12\(sep)a\(sep)0"))
     }
 
     /// La commande de bascule doit citer sa cible : un nom de session peut

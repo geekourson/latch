@@ -26,8 +26,8 @@ final class AppState: ObservableObject {
     /// Erreur de validation ou d'ouverture, affichée sans bloquer.
     @Published var errorMessage: String?
 
-    /// Ce que les hooks du §10 racontent, par hôte.
-    @Published private(set) var claudeActivity: [String: ClaudeActivity] = [:]
+    /// Ce que les hooks du §10 racontent, par hôte puis par session Claude.
+    @Published private(set) var claudeRosters: [String: ClaudeRoster] = [:]
 
     /// La sonde du Mac, tenue à jour plutôt que relevée à chaque affichage :
     /// elle parcourt le disque, et la barre latérale la lisait à chaque
@@ -47,6 +47,9 @@ final class AppState: ObservableObject {
     /// qu'une activité Claude — qui ne connaît qu'un `cwd` — se rattache à une
     /// session tmux.
     @Published private(set) var liveDirectories: [String: [String: String]] = [:]
+    /// La fenêtre de chaque panneau tmux, par hôte : c'est ce qui place une
+    /// session Claude dans une fenêtre.
+    @Published private(set) var livePanes: [String: [String: String]] = [:]
     /// L'état git du panneau actif, par hôte puis par session (§9.1).
     @Published private(set) var liveRepositories: [String: [String: LiveRepository]] = [:]
     /// Toutes les sessions tmux vues sur un hôte, raccourci ou pas.
@@ -219,7 +222,7 @@ final class AppState: ObservableObject {
         )
         stream.onEvent = { [weak self, weak stream] event in
             guard let self, let stream else { return }
-            self.claudeActivity[host] = stream.activity
+            self.claudeRosters[host] = stream.roster
             self.announce(event, on: host)
         }
         hookStreams[host] = stream
@@ -257,6 +260,7 @@ final class AppState: ObservableObject {
                     self.liveRepositories[host] = inspector.repositories
                     self.liveSessions[host] = inspector.sessions
                     self.liveDirectories[host] = inspector.directories
+                    self.livePanes[host] = inspector.panes
                 }
             }
             .store(in: &cancellables)
@@ -281,13 +285,14 @@ final class AppState: ObservableObject {
         for (host, stream) in hookStreams where !liveHosts.contains(host) {
             stream.stop()
             hookStreams.removeValue(forKey: host)
-            claudeActivity.removeValue(forKey: host)
+            claudeRosters.removeValue(forKey: host)
         }
         for (host, inspector) in inspectors where !liveHosts.contains(host) {
             inspector.stop()
             inspectors.removeValue(forKey: host)
             liveWindows.removeValue(forKey: host)
             liveRepositories.removeValue(forKey: host)
+            livePanes.removeValue(forKey: host)
             liveSessions.removeValue(forKey: host)
         }
         for (host, probe) in latencyProbes where !liveHosts.contains(host) {
@@ -542,22 +547,38 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// L'activité Claude d'une session tmux précise.
-    ///
-    /// Les hooks ne savent rien de tmux : tout ce qu'ils rapportent est un
-    /// `cwd`. On le rapproche du répertoire du panneau actif, que l'inspecteur
-    /// relève au même moment. Sans correspondance, on ne rattache rien —
-    /// désigner la mauvaise session serait pire que n'en désigner aucune.
-    func claudeActivity(inSession session: String, on host: String) -> ClaudeActivity? {
-        guard let activity = claudeActivity(on: host), let directory = activity.directory,
-              let paths = liveDirectories[host]
-        else { return nil }
-        return paths[session] == directory ? activity : nil
+    /// L'activité Claude d'une fenêtre tmux, par le panneau que donne le hook.
+    func claudeActivity(in window: LiveWindow, on host: String) -> ClaudeActivity? {
+        claudeRosters[host]?.activity(inWindow: window.id, panes: livePanes[host])
     }
 
+    /// L'activité Claude d'une session tmux : la plus pressante de ses
+    /// fenêtres.
+    ///
+    /// Un hook installé avant le panneau ne rapporte qu'un `cwd`. On le
+    /// rapproche alors du répertoire du panneau actif, que l'inspecteur relève
+    /// au même moment. Sans correspondance, on ne rattache rien — désigner la
+    /// mauvaise session serait pire que n'en désigner aucune.
+    func claudeActivity(inSession session: String, on host: String) -> ClaudeActivity? {
+        claudeRosters[host]?.activity(
+            inSession: session,
+            panes: livePanes[host],
+            directory: liveDirectories[host]?[session]
+        )
+    }
+
+    /// L'activité Claude d'un hôte : la plus pressante de toutes ses sessions.
     func claudeActivity(on host: String) -> ClaudeActivity? {
-        guard let activity = claudeActivity[host], activity.isActive else { return nil }
-        return activity
+        ClaudeActivity.mostPressing(claudeRosters[host]?.live(panes: livePanes[host]) ?? [])
+    }
+
+    /// Ce que montre la barre d'état pour un onglet : sa session tmux quand on
+    /// la connaît, sinon tout l'hôte.
+    func claudeActivity(for session: TerminalSession) -> ClaudeActivity? {
+        guard let shortcutID = session.shortcutID,
+              let shortcut = store.shortcut(id: shortcutID)
+        else { return claudeActivity(on: session.host) }
+        return claudeActivity(inSession: shortcut.connection.tmuxSession, on: session.host)
     }
 
     /// Ouvre un terminal sur un hôte sans passer par un raccourci — ce que fait

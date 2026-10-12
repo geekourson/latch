@@ -128,7 +128,7 @@ private struct StatusBar: View {
             if let session = app.selectedTab {
                 SessionStatus(session: session)
 
-                if let activity = app.claudeActivity(on: session.host) {
+                if let activity = app.claudeActivity(for: session) {
                     ClaudeIndicator(activity: activity)
                 }
 

@@ -109,6 +109,32 @@ final class ClaudeAttentionTests: XCTestCase {
         XCTAssertEqual(activity.attention, .permission)
     }
 
+    /// Un message envoyé remet Claude au travail : sans ça, le témoin restait
+    /// sur « à toi » jusqu'au premier outil.
+    func testSendingAMessageMeansClaudeIsWorking() throws {
+        var activity = ClaudeActivity()
+        activity.apply(try XCTUnwrap(HookEvent.parse(
+            line: #"{"hook_event_name":"Stop","session_id":"x"}"#)))
+        XCTAssertEqual(activity.attention, .reply)
+
+        activity.apply(try XCTUnwrap(HookEvent.parse(
+            line: #"{"hook_event_name":"UserPromptSubmit","session_id":"x","prompt":"vas-y"}"#)))
+        XCTAssertNil(activity.attention)
+        XCTAssertTrue(activity.isActive)
+    }
+
+    /// Une question posée par l'outil dédié attend une réponse, tout de suite.
+    func testAQuestionWaitsForAnAnswer() throws {
+        var activity = ClaudeActivity()
+        activity.apply(try XCTUnwrap(HookEvent.parse(
+            line: #"{"hook_event_name":"PreToolUse","tool_name":"AskUserQuestion","session_id":"x"}"#)))
+        XCTAssertEqual(activity.attention, .reply)
+
+        activity.apply(try XCTUnwrap(HookEvent.parse(
+            line: #"{"hook_event_name":"PostToolUse","tool_name":"AskUserQuestion","session_id":"x"}"#)))
+        XCTAssertNil(activity.attention, "répondu : Claude reprend")
+    }
+
     func testTheEndOfASessionClearsEverything() throws {
         var activity = ClaudeActivity()
         activity.apply(try XCTUnwrap(HookEvent.parse(line: permissionLine)))

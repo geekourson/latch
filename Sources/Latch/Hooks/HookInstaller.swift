@@ -22,10 +22,17 @@ enum HookInstaller {
 
     /// Les événements écoutés. Les quatre du §10, plus `Stop` et
     /// `Notification` — sans eux, « prévenir quand une tâche se termine ou
-    /// qu'une permission est attendue » n'est pas réalisable.
+    /// qu'une permission est attendue » n'est pas réalisable — et
+    /// `UserPromptSubmit`, sans lequel le témoin reste sur « à toi » pendant
+    /// que Claude travaille à ta réponse.
     static let events = [
-        "SessionStart", "SessionEnd", "PreToolUse", "PostToolUse", "Stop", "Notification",
+        "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+        "Stop", "Notification",
     ]
+
+    /// La marque de la version du hook. Un hook plus ancien ne donne pas son
+    /// panneau tmux : il est alors à réinstaller, même s'il est en place.
+    static let hookVersion = "latch-hook 2"
 
     // MARK: - Le hook lui-même
 
@@ -37,13 +44,25 @@ enum HookInstaller {
         # que l'app suit par une connexion ssh secondaire.
         # Supprimer ce fichier et l'entrée correspondante dans
         # ~/.claude/settings.json suffit à tout désinstaller.
+        # \(hookVersion)
         set -u
         dir="$HOME/.latch"
         log="$dir/events.jsonl"
         mkdir -p "$dir" 2>/dev/null || exit 0
 
+        # Le panneau tmux où tourne Claude, pour que Latch sache dans quelle
+        # fenêtre il attend. Seule une forme sûre (%12) entre dans le JSON.
+        pane="${TMUX_PANE:-}"
+        case "$pane" in %[0-9]*) ;; *) pane="" ;; esac
+        case "$pane" in *[!%0-9]*) pane="" ;; esac
+
         # Le contenu JSON n'a pas de retour à la ligne nu : l'aplatir est sûr.
-        { tr -d '\\n'; printf '\\n'; } >> "$log" 2>/dev/null
+        if [ -n "$pane" ]; then
+            { tr -d '\\n'; printf '\\n'; } \\
+                | sed 's/^[[:space:]]*{/{"latch_pane":"'"$pane"'",/' >> "$log" 2>/dev/null
+        else
+            { tr -d '\\n'; printf '\\n'; } >> "$log" 2>/dev/null
+        fi
 
         # Le journal sert à l'affichage en direct, pas à l'archivage : on le
         # borne, sinon il grossit indéfiniment sur un serveur qui tourne.
@@ -167,7 +186,9 @@ enum HookInstaller {
     /// Les hooks sont-ils déjà en place ? Un aller-retour — aucun sur le Mac —
     /// sans rien modifier.
     static func isInstalled(on alias: String) async -> Bool {
-        let check = "test -x ~/.latch/hook.sh && grep -q '.latch/hook.sh' ~/.claude/settings.json"
+        let check = "test -x ~/.latch/hook.sh"
+            + " && grep -q '\(hookVersion)' ~/.latch/hook.sh"
+            + " && grep -q '.latch/hook.sh' ~/.claude/settings.json"
         return (try? await run(check, on: alias)) != nil
     }
 

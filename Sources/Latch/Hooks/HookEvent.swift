@@ -41,6 +41,7 @@ struct HookEvent: Equatable {
         case sessionEnd = "SessionEnd"
         case preToolUse = "PreToolUse"
         case postToolUse = "PostToolUse"
+        case userPromptSubmit = "UserPromptSubmit"
         case stop = "Stop"
         case notification = "Notification"
         case unknown
@@ -53,6 +54,11 @@ struct HookEvent: Equatable {
     var kind: Kind
     var rawEvent: String
     var sessionID: String?
+    /// Le panneau tmux où tourne Claude (`%12`), ajouté par le hook à partir
+    /// de `$TMUX_PANE`. C'est ce qui rattache l'événement à **une** fenêtre ;
+    /// absent hors de tmux, ou avec un hook installé par une version
+    /// antérieure.
+    var pane: String?
     var toolName: String?
     /// Le fichier que Claude est en train de toucher, extrait de `tool_input`.
     var filePath: String?
@@ -70,6 +76,10 @@ struct HookEvent: Equatable {
         // Un tour qui se termine rend la main : c'est le signal le plus
         // immédiat, et le seul qui arrive sans délai.
         if kind == .stop { return .reply }
+        // Une question posée par l'outil dédié n'est ni une fin de tour ni une
+        // autorisation : sans ça, elle ne se voyait qu'à la notification
+        // d'inactivité, une minute plus tard.
+        if kind == .preToolUse, toolName == Self.questionTool { return .reply }
         guard kind == .notification else { return nil }
 
         switch notificationType {
@@ -89,6 +99,8 @@ struct HookEvent: Equatable {
     /// Vrai quand Claude est bloqué sur une autorisation.
     var isAwaitingPermission: Bool { attention == .permission }
 
+    static let questionTool = "AskUserQuestion"
+
     /// Les outils qui touchent un fichier nomment leur cible différemment.
     private static let pathKeys = ["file_path", "path", "notebook_path", "filePath"]
 
@@ -105,6 +117,7 @@ struct HookEvent: Equatable {
         var event = HookEvent(kind: Kind(rawEvent: rawEvent), rawEvent: rawEvent)
         event.receivedAt = date
         event.sessionID = object["session_id"] as? String
+        if let pane = object["latch_pane"] as? String, !pane.isEmpty { event.pane = pane }
         event.toolName = object["tool_name"] as? String
         event.cwd = object["cwd"] as? String
         event.message = object["message"] as? String
@@ -132,9 +145,11 @@ struct ClaudeActivity: Equatable {
     var currentTool: String?
     /// Ce que Claude attend, ou rien s'il travaille.
     var attention: ClaudeAttention?
-    /// Le répertoire de la session Claude, seul lien avec une session tmux :
-    /// les hooks ne savent rien de tmux.
+    /// Le répertoire de la session Claude. Seul lien avec tmux quand le hook
+    /// ne fournit pas de panneau.
     var directory: String?
+    /// Le panneau tmux de cette session Claude, quand le hook le connaît.
+    var pane: String?
     var lastEventAt: Date?
 
     var isAwaitingPermission: Bool { attention == .permission }
@@ -148,6 +163,7 @@ struct ClaudeActivity: Equatable {
     mutating func apply(_ event: HookEvent) {
         lastEventAt = event.receivedAt
         if let cwd = event.cwd { directory = cwd }
+        if let pane = event.pane { self.pane = pane }
 
         switch event.kind {
         case .sessionStart:
@@ -160,12 +176,19 @@ struct ClaudeActivity: Equatable {
             currentTool = nil
             attention = nil
 
+        // Un message envoyé, c'est Claude qui se remet au travail.
+        case .userPromptSubmit:
+            isActive = true
+            currentTool = nil
+            attention = nil
+
         // Un outil qui démarre ou se termine, c'est Claude qui travaille :
-        // ce qu'il attendait ne l'attend plus.
+        // ce qu'il attendait ne l'attend plus — sauf si l'outil est une
+        // question.
         case .preToolUse:
             isActive = true
             currentTool = event.toolName
-            attention = nil
+            attention = event.attention
             if let path = event.filePath { currentFile = path }
 
         case .postToolUse:
@@ -184,6 +207,83 @@ struct ClaudeActivity: Equatable {
 
         case .unknown:
             break
+        }
+    }
+}
+
+// MARK: - Plusieurs Claude sur un hôte
+
+/// Toutes les sessions Claude d'un hôte, et ce qui les relie aux fenêtres tmux.
+///
+/// Un hôte peut faire tourner plusieurs Claude à la fois : un seul état par
+/// hôte laissait le dernier événement reçu parler pour tous. Chaque session
+/// Claude garde donc le sien, et c'est son panneau tmux qui la place dans une
+/// fenêtre.
+struct ClaudeRoster: Equatable {
+    /// Par identifiant de session Claude.
+    var activities: [String: ClaudeActivity] = [:]
+
+    mutating func apply(_ event: HookEvent) {
+        let key = event.sessionID ?? ""
+        // Une session terminée n'a plus rien à montrer : on l'oublie, sinon
+        // elle s'accumule.
+        if event.kind == .sessionEnd {
+            activities[key] = nil
+            return
+        }
+        activities[key, default: ClaudeActivity()].apply(event)
+    }
+
+    /// Les sessions encore là. Quand on connaît les panneaux de l'hôte, une
+    /// session dont le panneau a disparu est périmée : Claude a été tué sans
+    /// pouvoir envoyer `SessionEnd`.
+    func live(panes: [String: String]?) -> [ClaudeActivity] {
+        activities.values.filter { activity in
+            guard activity.isActive else { return false }
+            guard let pane = activity.pane, let panes else { return true }
+            return panes[pane] != nil
+        }
+    }
+
+    /// Le témoin d'une fenêtre : `panes` associe un panneau à l'identifiant
+    /// de sa fenêtre (`session:index`).
+    func activity(inWindow window: String, panes: [String: String]?) -> ClaudeActivity? {
+        guard let panes else { return nil }
+        return ClaudeActivity.mostPressing(
+            live(panes: panes).filter { $0.pane.flatMap { panes[$0] } == window }
+        )
+    }
+
+    /// Le témoin d'une session tmux : ses fenêtres, plus — pour un hook qui ne
+    /// donne pas son panneau — ce que le répertoire permet de rattacher.
+    func activity(
+        inSession session: String, panes: [String: String]?, directory: String?
+    ) -> ClaudeActivity? {
+        let prefix = session + ":"
+        return ClaudeActivity.mostPressing(live(panes: panes).filter { activity in
+            if let pane = activity.pane {
+                return panes?[pane]?.hasPrefix(prefix) == true
+            }
+            return directory != nil && activity.directory == directory
+        })
+    }
+}
+
+extension ClaudeActivity {
+    /// Celle qui réclame le plus : une autorisation, puis une réponse, puis
+    /// la plus récente. Un témoin qui en résume plusieurs ne doit pas cacher
+    /// celle qui bloque.
+    static func mostPressing(_ activities: [ClaudeActivity]) -> ClaudeActivity? {
+        func rank(_ activity: ClaudeActivity) -> Int {
+            switch activity.attention {
+            case .permission: return 2
+            case .reply: return 1
+            case .none: return 0
+            }
+        }
+        return activities.max { lhs, rhs in
+            if rank(lhs) != rank(rhs) { return rank(lhs) < rank(rhs) }
+            return (lhs.lastEventAt ?? .distantPast) < (rhs.lastEventAt ?? .distantPast)
         }
     }
 }

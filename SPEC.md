@@ -595,7 +595,15 @@ Le §10 ne cite que `SessionStart`, `PreToolUse`, `PostToolUse` et `SessionEnd`.
 Deux autres événements sont indispensables à ce que le même paragraphe demande
 — prévenir « quand une tâche se termine ou qu'une permission est attendue » :
 `Stop` marque la fin d'une réponse, et `Notification` porte le motif
-`permission_prompt`. Les six sont installés.
+`permission_prompt`. S'y ajoute `UserPromptSubmit`, sans lequel le témoin reste
+sur « à toi » pendant que Claude travaille à la réponse. Les sept sont installés.
+
+Un hôte peut faire tourner plusieurs Claude : l'état est tenu par session
+Claude, pas par hôte. Le hook ajoute `$TMUX_PANE` à chaque événement, et
+l'inspecteur tmux relève la fenêtre de chaque panneau : le témoin se pose sur
+la fenêtre où tourne Claude, et la session comme le serveur montrent le plus
+pressant de leurs fenêtres. Un hook plus ancien, sans panneau, se rattache
+encore à sa session par le répertoire.
 
 mosh étant sous GPL-3.0-or-later, chaque release publie à côté du `.dmg` les
 sources exactes du `mosh-client` embarqué et le script qui l'a compilé. Latch,
