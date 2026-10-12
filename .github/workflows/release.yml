@@ -166,6 +166,13 @@ jobs:
           set -euo pipefail
           codesign --force --sign "$MACOS_SIGNING_IDENTITY" build/Latch.dmg
 
+          # Un secret collé dans l'interface de GitHub garde son retour à la
+          # ligne, et Apple répond alors 401 à des identifiants pourtant
+          # justes. Aucun des trois ne contient d'espace : on les retire.
+          NOTARY_APPLE_ID=$(printf %s "$NOTARY_APPLE_ID" | tr -d '[:space:]')
+          NOTARY_PASSWORD=$(printf %s "$NOTARY_PASSWORD" | tr -d '[:space:]')
+          NOTARY_TEAM_ID=$(printf %s "$NOTARY_TEAM_ID" | tr -d '[:space:]')
+
           xcrun notarytool submit build/Latch.dmg \
             --apple-id "$NOTARY_APPLE_ID" \
             --password "$NOTARY_PASSWORD" \
