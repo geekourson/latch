@@ -335,6 +335,20 @@ final class ClaudeRosterTests: XCTestCase {
         XCTAssertNil(roster.activity(inSession: "web", panes: panes, directory: nil))
     }
 
+    /// Sous ses fenêtres listées, la ligne de la session ne répète pas leurs
+    /// témoins ; elle garde ce qu'aucune fenêtre ne porte.
+    func testTheSessionRowDoesNotRepeatItsWindows() throws {
+        var roster = ClaudeRoster()
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"a","latch_pane":"%1"}"#))
+
+        XCTAssertNil(roster.activity(inSession: "api", panes: panes, directory: nil,
+                                     windowsShown: true))
+
+        roster.apply(try event(#"{"hook_event_name":"Stop","session_id":"b","cwd":"/srv/api"}"#))
+        XCTAssertNotNil(roster.activity(inSession: "api", panes: panes, directory: "/srv/api",
+                                        windowsShown: true))
+    }
+
     /// Un hook d'avant le panneau se rattache encore par son répertoire.
     func testAnOlderHookStillMatchesByDirectory() throws {
         var roster = ClaudeRoster()

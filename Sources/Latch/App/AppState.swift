@@ -567,6 +567,19 @@ final class AppState: ObservableObject {
         )
     }
 
+    /// Le témoin de la ligne d'une session dans la barre latérale. Ses
+    /// fenêtres listées portent chacune le leur : la ligne ne garde que ce
+    /// qu'aucune fenêtre ne montre — un hook sans panneau, rattaché par le
+    /// répertoire.
+    func claudeActivityOnRow(ofSession session: String, on host: String) -> ClaudeActivity? {
+        claudeRosters[host]?.activity(
+            inSession: session,
+            panes: livePanes[host],
+            directory: liveDirectories[host]?[session],
+            windowsShown: !liveWindows(on: host, session: session).isEmpty
+        )
+    }
+
     /// L'activité Claude d'un hôte : la plus pressante de toutes ses sessions.
     func claudeActivity(on host: String) -> ClaudeActivity? {
         ClaudeActivity.mostPressing(claudeRosters[host]?.live(panes: livePanes[host]) ?? [])

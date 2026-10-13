@@ -256,13 +256,18 @@ struct ClaudeRoster: Equatable {
 
     /// Le témoin d'une session tmux : ses fenêtres, plus — pour un hook qui ne
     /// donne pas son panneau — ce que le répertoire permet de rattacher.
+    ///
+    /// `windowsShown` écarte les Claude que leur fenêtre montre déjà : sur la
+    /// ligne d'une session dont les fenêtres sont listées, répéter leur témoin
+    /// le ferait passer pour celui d'un autre Claude.
     func activity(
-        inSession session: String, panes: [String: String]?, directory: String?
+        inSession session: String, panes: [String: String]?, directory: String?,
+        windowsShown: Bool = false
     ) -> ClaudeActivity? {
         let prefix = session + ":"
         return ClaudeActivity.mostPressing(live(panes: panes).filter { activity in
             if let pane = activity.pane {
-                return panes?[pane]?.hasPrefix(prefix) == true
+                return !windowsShown && panes?[pane]?.hasPrefix(prefix) == true
             }
             return directory != nil && activity.directory == directory
         })

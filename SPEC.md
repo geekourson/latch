@@ -601,9 +601,11 @@ sur « à toi » pendant que Claude travaille à la réponse. Les sept sont inst
 Un hôte peut faire tourner plusieurs Claude : l'état est tenu par session
 Claude, pas par hôte. Le hook ajoute `$TMUX_PANE` à chaque événement, et
 l'inspecteur tmux relève la fenêtre de chaque panneau : le témoin se pose sur
-la fenêtre où tourne Claude, et la session comme le serveur montrent le plus
-pressant de leurs fenêtres. Un hook plus ancien, sans panneau, se rattache
-encore à sa session par le répertoire.
+la fenêtre où tourne Claude, et le serveur montre le plus pressant de ses
+fenêtres. La ligne d'une session ne répète pas le témoin de ses fenêtres
+listées : il passerait pour celui d'un autre Claude. Un hook plus ancien, sans
+panneau, se rattache encore à sa session par le répertoire, et son témoin
+reste sur la ligne de la session.
 
 mosh étant sous GPL-3.0-or-later, chaque release publie à côté du `.dmg` les
 sources exactes du `mosh-client` embarqué et le script qui l'a compilé. Latch,

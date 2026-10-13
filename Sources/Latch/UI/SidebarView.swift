@@ -200,9 +200,10 @@ private struct ShortcutRow: View {
                     .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
 
                 // Le témoin du serveur dit qu'une session veut quelque chose ;
-                // celui-ci dit laquelle.
-                if let activity = app.claudeActivity(
-                    inSession: shortcut.connection.tmuxSession,
+                // celui-ci dit laquelle, quand ses fenêtres ne le disent pas
+                // déjà.
+                if let activity = app.claudeActivityOnRow(
+                    ofSession: shortcut.connection.tmuxSession,
                     on: shortcut.connection.host
                 ) {
                     ClaudeDot(activity: activity)
