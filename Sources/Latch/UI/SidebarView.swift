@@ -49,21 +49,47 @@ struct SidebarView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                app.newShortcut()
-            } label: {
-                Label("Nouvelle session", systemImage: "plus")
+            // 180 px tiennent tout juste les deux : espacements resserrés, et
+            // jamais de retour à la ligne.
+            HStack(spacing: 6) {
+                // La version installée, toujours sous les yeux : c'est elle
+                // qu'on cherche quand une release vient de sortir.
+                if let version = Self.version {
+                    Text(version)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color.latchTextFaint)
+                        .fixedSize()
+                        .textSelection(.enabled)
+
+                    Rectangle()
+                        .fill(Color.latchTextFaint.opacity(0.5))
+                        .frame(width: 1, height: 10)
+                }
+
+                Button {
+                    app.newShortcut()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                        Text("Nouvelle session")
+                            .lineLimit(1)
+                    }
                     .font(.system(size: 11))
                     .foregroundStyle(Color.latchTextDim)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
                     .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
         }
         .frame(width: 180)
         .background(Color.latchBackground)
     }
+
+    private static let version = (Bundle.main.object(
+        forInfoDictionaryKey: "CFBundleShortVersionString") as? String).map { "v" + $0 }
 }
 
 // MARK: - Serveur
