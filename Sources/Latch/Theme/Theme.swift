@@ -113,7 +113,7 @@ extension Theme {
         background: ThemeColor(0x17130F),
         foreground: ThemeColor(0xEDE4D8),
         cursor: ThemeColor(0xC89B6A),
-        selectionBackground: ThemeColor(0x241D18),
+        selectionBackground: ThemeColor(0x4A3B2F),
         selectionForeground: nil,
         ansi: [
             0x241D18, 0xC96A5E, 0x8FB09A, 0xC89B6A,

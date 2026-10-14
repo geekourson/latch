@@ -50,9 +50,10 @@ struct TerminalPane: NSViewRepresentable {
         terminal.nativeForegroundColor = theme.foreground.nsColor
         terminal.caretColor = theme.cursor.nsColor
         terminal.selectedTextBackgroundColor = theme.selectionBackground.nsColor
-        if let selected = theme.selectionForeground {
-            terminal.selectedTextForegroundColor = selected.nsColor
-        }
+        // SwiftTerm peint toujours le texte sélectionné dans cette couleur, noir
+        // par défaut : sans couleur propre au thème, on garde celle du texte.
+        terminal.selectedTextForegroundColor =
+            (theme.selectionForeground ?? theme.foreground).nsColor
         terminal.installColors(theme.terminalColors)
         container.layer?.backgroundColor = theme.background.cgColor
         container.needsLayout = true
