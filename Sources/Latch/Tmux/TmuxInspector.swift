@@ -395,17 +395,26 @@ final class TmuxInspector: ObservableObject {
         }
     }
 
+    private func publish<Value: Equatable>(
+        _ value: Value, to keyPath: ReferenceWritableKeyPath<TmuxInspector, Value>
+    ) {
+        if self[keyPath: keyPath] != value { self[keyPath: keyPath] = value }
+    }
+
     private func handle(line: String) {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Fin de lot : on publie d'un coup, pour que la barre latérale ne
         // clignote pas pendant qu'un lot arrive morceau par morceau.
         if trimmed == Self.recordEnd {
-            windows = honouringPendingSelections(Dictionary(grouping: pending, by: \.session))
-            repositories = pendingRepositories
-            sessions = pendingSessions.sorted { $0.name < $1.name }
-            directories = pendingDirectories
-            panes = pendingPanes
+            // Le lot revient toutes les trois secondes, presque toujours
+            // identique : ne republier que ce qui a bougé évite de recalculer
+            // toute l'interface pour rien.
+            publish(honouringPendingSelections(Dictionary(grouping: pending, by: \.session)), to: \.windows)
+            publish(pendingRepositories, to: \.repositories)
+            publish(pendingSessions.sorted { $0.name < $1.name }, to: \.sessions)
+            publish(pendingDirectories, to: \.directories)
+            publish(Optional(pendingPanes), to: \.panes)
             pending.removeAll()
             pendingRepositories.removeAll()
             pendingSessions.removeAll()
