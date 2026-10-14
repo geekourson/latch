@@ -15,6 +15,10 @@ struct TerminalPane: NSViewRepresentable {
     @ObservedObject var session: TerminalSession
     /// Thème et typographie, recalculés par le store (SPEC §9.3).
     var style: TerminalStyle = TerminalStyle()
+    /// Un onglet en arrière-plan reste en vie pour garder son flux, mais ne
+    /// doit pas se redessiner : une opacité nulle n'empêche pas AppKit de
+    /// repeindre la vue à chaque octet reçu, une vue masquée si.
+    var isVisible = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
@@ -23,6 +27,7 @@ struct TerminalPane: NSViewRepresentable {
     func makeNSView(context: Context) -> PaddedTerminalView {
         let container = PaddedTerminalView(inset: style.padding)
         container.terminalView.terminalDelegate = context.coordinator
+        container.isHidden = !isVisible
         apply(style, to: container)
         context.coordinator.appliedStyle = style
         context.coordinator.attach(to: container.terminalView)
@@ -31,6 +36,16 @@ struct TerminalPane: NSViewRepresentable {
 
     func updateNSView(_ nsView: PaddedTerminalView, context: Context) {
         context.coordinator.session = session
+        if nsView.isHidden == isVisible {
+            nsView.isHidden = !isVisible
+            // Ce qui est arrivé pendant qu'il était masqué n'a pas été peint.
+            // Masquer l'ancien onglet lui retire le clavier : le nouveau le
+            // reprend, sinon la frappe n'irait nulle part.
+            if isVisible {
+                nsView.terminalView.needsDisplay = true
+                nsView.window?.makeFirstResponder(nsView.terminalView)
+            }
+        }
         guard context.coordinator.appliedStyle != style else { return }
         apply(style, to: nsView)
         context.coordinator.appliedStyle = style

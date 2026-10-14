@@ -75,7 +75,7 @@ struct ContentView: View {
 
             ForEach(app.tabs) { session in
                 let isSelected = session.id == app.selectedTabID
-                TerminalPane(session: session, style: app.store.terminalStyle)
+                TerminalPane(session: session, style: app.store.terminalStyle, isVisible: isSelected)
                     .opacity(isSelected ? 1 : 0)
                     .allowsHitTesting(isSelected)
                     .zIndex(isSelected ? 1 : 0)
