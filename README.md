@@ -15,7 +15,7 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.12.4 — bêta.** La feuille de route est parcourue : raccourcis persistés en
+**v0.12.5 — bêta.** La feuille de route est parcourue : raccourcis persistés en
 JSON, barre latérale, onglets, écran du builder, import de thèmes, sonde serveur
 et cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
 Claude Code, fenêtres tmux réelles et serveur MCP. 353 tests passent.
