@@ -1,17 +1,10 @@
 <h1 align="center">Latch</h1>
 <p align="center"><em>Your sessions, still running.</em></p>
 <p align="center">
-  <img alt="statut : alpha" src="https://img.shields.io/badge/statut-alpha-D97757">
+  <img alt="statut : bêta" src="https://img.shields.io/badge/statut-b%C3%AAta-D97757">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-8FB09A">
   <img alt="licence MIT" src="https://img.shields.io/badge/licence-MIT-C89B6A">
 </p>
-
-> [!WARNING]
-> **Alpha.** Latch est complet au sens de sa feuille de route, et utilisé tous
-> les jours par son auteur — mais sur **une seule machine et un seul serveur**.
-> Rien n'a été éprouvé ailleurs. Attendez-vous à des arêtes vives, et voyez
-> [Ce qui n'a pas été vérifié](#ce-qui-na-pas-été-vérifié) avant de compter
-> dessus.
 
 Latch est un gestionnaire de sessions distantes pour macOS. Un clic sur une
 session ouvre un terminal attaché à une session `tmux` sur un serveur, quel que
@@ -22,26 +15,10 @@ lendemain, la session est là où vous l'aviez laissée.
 
 ## État
 
-**v0.4 — alpha.** La feuille de route est parcourue : raccourcis persistés en
+**v0.12.4 — bêta.** La feuille de route est parcourue : raccourcis persistés en
 JSON, barre latérale, onglets, écran du builder, import de thèmes, sonde serveur
 et cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
-Claude Code, fenêtres tmux réelles et serveur MCP. 315 tests passent.
-
-Parcourue ne veut pas dire éprouvée. Ce qui suit est décrit tel que c'est
-construit ; ce qui n'a jamais tourné ailleurs que sur la machine de
-développement est dit plus bas, nommément.
-
-### Ce qui n'a pas été vérifié
-
-| | |
-|---|---|
-| **Un seul serveur** | Tout a été validé contre un hôte Debian. La sonde prétend reconnaître six familles de distributions ; **cinq n'ont jamais été exercées**. |
-| **La reconnexion au réveil** | Le code et ses tests existent, le scénario complet — capot fermé, réseau perdu, retour — n'a jamais été observé de bout en bout. |
-| **Le MCP piloté par Claude Code** | Le serveur a été exercé à la main. Le chemin réel, Claude Code sur le serveur appelant Latch par le tunnel, reste à voir tourner. |
-| **Le glisser-déposer** | Réordonner les étapes de pré-vol et les fenêtres fonctionne en théorie, jamais essayé sérieusement. |
-
-Rien de tout cela n'est cassé à ma connaissance. C'est simplement non vérifié,
-et la différence compte quand quelqu'un d'autre s'en sert.
+Claude Code, fenêtres tmux réelles et serveur MCP. 353 tests passent.
 
 ### La barre latérale montre les vraies fenêtres
 
