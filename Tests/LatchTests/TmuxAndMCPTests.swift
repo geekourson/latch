@@ -227,13 +227,17 @@ final class MCPHostTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    /// Un état qui connaît le serveur `alex`, comme après une première
+    /// connexion : Claude Code ne peut viser que des hôtes déjà connus.
     private func makeState() -> AppState {
-        AppState(
+        let state = AppState(
             store: SessionStore(
                 fileURL: directory.appendingPathComponent("shortcuts.json"),
                 seedFromSSHConfig: false
             )
         )
+        _ = state.store.server(forAlias: "alex", creatingIfNeeded: true)
+        return state
     }
 
     func testListsOpenSessions() {
@@ -255,7 +259,7 @@ final class MCPHostTests: XCTestCase {
         let command = try? XCTUnwrap(state.tabs.first?.command)
         XCTAssertEqual(
             command,
-            #"ssh -t alex "echo \"l'erreur \$HOME\"""#
+            #"ssh -t -- alex "echo \"l'erreur \$HOME\"""#
         )
         state.closeAll()
     }
@@ -277,6 +281,34 @@ final class MCPHostTests: XCTestCase {
         XCTAssertTrue(state.mcpRunCommand("ls", on: nil, named: nil).contains("Aucun hôte"))
         XCTAssertTrue(state.mcpShowFile("/etc/hosts", on: nil).contains("Aucun hôte"))
         XCTAssertTrue(state.tabs.isEmpty)
+    }
+
+    /// L'échappement protège du shell, pas de ssh : un hôte en `-o…` serait
+    /// une option, et sa commande tournerait sur le Mac. Refusé, sans onglet.
+    func testRefusesAHostThatWouldBeAnSSHOption() {
+        let state = makeState()
+        let injected = "-oProxyCommand=touch /tmp/latch-pwned"
+        XCTAssertTrue(state.mcpRunCommand("uptime", on: injected, named: nil).contains("inconnu"))
+        XCTAssertTrue(state.mcpShowFile("/etc/hosts", on: injected).contains("inconnu"))
+        XCTAssertTrue(state.tabs.isEmpty)
+    }
+
+    /// Claude Code ne vise que les hôtes que l'utilisateur a déjà déclarés,
+    /// pas n'importe quelle entrée de `~/.ssh/config`.
+    func testRefusesAnUnknownHostAndNamesTheKnownOnes() {
+        let state = makeState()
+        let answer = state.mcpRunCommand("uptime", on: "prod", named: nil)
+        XCTAssertTrue(answer.contains("inconnu"), answer)
+        XCTAssertTrue(answer.contains("alex"), answer)
+        XCTAssertTrue(state.tabs.isEmpty)
+    }
+
+    /// Même si l'hôte venait à passer, `--` ferme la porte aux options.
+    func testSSHStopsReadingOptionsBeforeTheHost() {
+        let state = makeState()
+        _ = state.mcpShowFile("/srv/api/main.py", on: "alex")
+        XCTAssertEqual(state.tabs.first?.command.hasPrefix("ssh -t -- alex "), true)
+        state.closeAll()
     }
 
     func testUnknownShortcutListsWhatExists() async {

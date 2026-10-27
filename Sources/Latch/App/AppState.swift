@@ -750,14 +750,43 @@ extension AppState: MCPHost {
         return "Onglet « \(shortcut.displayName) » ouvert."
     }
 
+    /// L'hôte visé par Claude Code, s'il est l'un de ceux que Latch connaît.
+    ///
+    /// `host` arrive tel quel de Claude Code, qui a pu lire du contenu piégé.
+    /// L'échappement le protège du shell, pas de ssh : un `-oProxyCommand=…`
+    /// serait pris pour une option et exécuté **sur le Mac**. On n'accepte
+    /// donc qu'un alias déjà connu — serveur, raccourci ou onglet ouvert — et
+    /// jamais un nom qui commence par un tiret.
+    private enum MCPTarget {
+        case host(String)
+        case refused(String)
+    }
+
+    private func mcpTarget(_ requested: String?) -> MCPTarget {
+        guard let alias = requested ?? selectedTab?.host, !alias.isEmpty else {
+            return .refused("Aucun hôte : précise « host », ou ouvre d'abord une session.")
+        }
+        let known = Set(store.servers.map(\.sshAlias))
+            .union(store.shortcuts.filter { $0.connection.transport.isRemote }.map(\.connection.host))
+            .union(tabs.map(\.host))
+            .subtracting([""])
+        guard !alias.hasPrefix("-"), known.contains(alias) else {
+            let list = known.sorted().joined(separator: ", ")
+            return .refused("Hôte inconnu de Latch : « \(alias) ». Hôtes connus : \(list).")
+        }
+        return .host(alias)
+    }
+
     func mcpRunCommand(_ command: String, on host: String?, named name: String?) -> String {
-        guard let alias = host ?? selectedTab?.host, !alias.isEmpty else {
-            return "Aucun hôte : précise « host », ou ouvre d'abord une session."
+        let alias: String
+        switch mcpTarget(host) {
+        case .host(let known): alias = known
+        case .refused(let reason): return reason
         }
         let title = name ?? command
         let session = TerminalSession(
             name: title,
-            command: "ssh -t \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(command))",
+            command: "ssh -t -- \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(command))",
             host: alias
         )
         tabs.append(session)
@@ -766,15 +795,17 @@ extension AppState: MCPHost {
     }
 
     func mcpShowFile(_ path: String, on host: String?) -> String {
-        guard let alias = host ?? selectedTab?.host, !alias.isEmpty else {
-            return "Aucun hôte : précise « host », ou ouvre d'abord une session."
+        let alias: String
+        switch mcpTarget(host) {
+        case .host(let known): alias = known
+        case .refused(let reason): return reason
         }
         // `less -R` garde les couleurs et rend la main avec « q ». Le fichier
         // est seulement lu ; Latch n'écrit jamais dedans.
         let remote = "less -R -- \(ShellQuoting.quoted(path))"
         let session = TerminalSession(
             name: (path as NSString).lastPathComponent,
-            command: "ssh -t \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(remote))",
+            command: "ssh -t -- \(ShellQuoting.quoted(alias)) \(ShellQuoting.doubleQuoted(remote))",
             host: alias
         )
         tabs.append(session)
