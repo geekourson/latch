@@ -264,7 +264,8 @@ ssh <alias> 'command -v tmux mosh-server claude; tmux -V 2>/dev/null; . /etc/os-
 ```
 
 Résultat mis en cache dans `Server.probe`, avec invalidation manuelle depuis
-l'interface et expiration après 7 jours.
+l'interface et expiration après 7 jours. Un hôte dégradé est sondé à nouveau à
+chaque connexion : un outil installé à la main ne doit pas attendre une semaine.
 
 ### Cascade de dégradation
 

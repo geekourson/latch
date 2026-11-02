@@ -151,10 +151,24 @@ final class SessionStoreTests: XCTestCase {
         var server = Server(name: "alex", sshAlias: "alex")
         XCTAssertTrue(server.probeIsStale, "jamais sondé")
 
+        server.probe = ProbeResult(hasTmux: true, hasMoshServer: true)
         server.probedAt = Date()
         XCTAssertFalse(server.probeIsStale)
 
         server.probedAt = Date(timeIntervalSinceNow: -8 * 24 * 3600)
+        XCTAssertTrue(server.probeIsStale)
+    }
+
+    /// tmux installé à la main depuis la dernière sonde : le constat
+    /// d'absence ne doit pas survivre jusqu'à la connexion suivante.
+    func testADegradedProbeIsRetriedAtTheNextConnection() {
+        var server = Server(name: "alex", sshAlias: "alex")
+        server.probedAt = Date()
+
+        server.probe = ProbeResult(hasTmux: false)
+        XCTAssertTrue(server.probeIsStale)
+
+        server.probe = ProbeResult(hasTmux: true, hasMoshServer: false)
         XCTAssertTrue(server.probeIsStale)
     }
 

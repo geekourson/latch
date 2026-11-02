@@ -21,9 +21,16 @@ struct Server: Codable, Identifiable, Equatable {
     /// quelqu'un d'autre ne sera jamais amélioré.
     var skipUpgradePrompt: Bool = false
 
-    /// La sonde expire au bout de sept jours.
+    /// La sonde expire au bout de sept jours — sauf un constat d'absence, qui
+    /// ne vaut que jusqu'à la connexion suivante.
+    ///
+    /// Un tmux installé à la main, hors du panneau d'amélioration, ne
+    /// déclenche aucune invalidation : sans cette exception, l'hôte resterait
+    /// une semaine en shell nu, sous un bandeau affirmant que tmux manque. La
+    /// sonde ne coûte qu'un aller-retour, et seulement aux hôtes dégradés.
     var probeIsStale: Bool {
         guard let probedAt else { return true }
+        if ServerCapabilities.degradation(for: probe).isDegraded { return true }
         return Date().timeIntervalSince(probedAt) > 7 * 24 * 3600
     }
 }
