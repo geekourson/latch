@@ -22,7 +22,7 @@ settings:
     # DispatchSource, que la concurrence stricte de Swift 6 rejette sans un
     # échafaudage disproportionné pour la v0.1. À resserrer plus tard.
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.12.7"
+    MARKETING_VERSION: "0.12.8"
     ALWAYS_SEARCH_USER_PATHS: NO
     CLANG_ENABLE_OBJC_ARC: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
