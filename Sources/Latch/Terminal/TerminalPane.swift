@@ -194,17 +194,36 @@ final class PaddedTerminalView: NSView {
 /// cliquer-glisser, et la sélection passerait dans son tampon au lieu du
 /// presse-papiers. Le bouton gauche reste donc au terminal : la souris n'est
 /// rapportée à tmux qu'en dehors d'un clic — la molette, en somme.
+///
+/// Ni pendant qu'une sélection est affichée : tant que la souris est rapportée,
+/// SwiftTerm efface la sélection à chaque sortie reçue. Sous une session qui
+/// redessine sans arrêt — le spinner de Claude —, elle disparaissait avant
+/// qu'on ait pu la copier. La molette retrouve tmux dès que la sélection
+/// tombe : clic, frappe, redimensionnement.
 final class SelectableTerminalView: TerminalView {
     override var mouseDownCanMoveWindow: Bool { false }
 
+    private var isPressed = false
+
     override func mouseDown(with event: NSEvent) {
+        isPressed = true
         allowMouseReporting = false
         super.mouseDown(with: event)
     }
 
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
-        allowMouseReporting = true
+        isPressed = false
+        updateMouseReporting()
+    }
+
+    override func selectionChanged(source: Terminal) {
+        super.selectionChanged(source: source)
+        updateMouseReporting()
+    }
+
+    private func updateMouseReporting() {
+        allowMouseReporting = !isPressed && !selectionActive
     }
 
     /// ⌘⌫ efface la ligne, comme dans Terminal : AppKit le traduit en

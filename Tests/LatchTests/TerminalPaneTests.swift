@@ -44,6 +44,25 @@ final class TerminalPaneTests: XCTestCase {
         XCTAssertTrue(terminal.allowMouseReporting, "la molette doit revenir à tmux")
     }
 
+    /// Une sortie continue — le spinner de Claude — n'efface pas la sélection
+    /// avant qu'on l'ait copiée. La molette revient à tmux quand elle tombe.
+    func testASelectionSurvivesStreamingOutput() throws {
+        let pane = PaddedTerminalView(inset: 0)
+        pane.frame = NSRect(x: 0, y: 0, width: 400, height: 200)
+        pane.layout()
+        let terminal = pane.terminalView
+        terminal.feed(text: "à copier\r\n")
+
+        terminal.selectAll()
+        XCTAssertFalse(terminal.allowMouseReporting, "une sélection affichée garde la souris")
+
+        terminal.feed(text: "\r⠋ Thinking…\r\n")
+        XCTAssertTrue(terminal.selectionActive, "la sortie ne doit pas effacer la sélection")
+
+        terminal.selectNone()
+        XCTAssertTrue(terminal.allowMouseReporting, "la molette doit revenir à tmux")
+    }
+
     /// ⌘⌫ efface la ligne comme dans Terminal : le shell reçoit ^U.
     func testCommandDeleteErasesTheLine() throws {
         let pane = PaddedTerminalView(inset: 0)
