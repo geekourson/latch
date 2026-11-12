@@ -9,6 +9,7 @@ import SwiftUI
 struct LatchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var app = AppState()
+    @StateObject private var updater = Updater()
 
     var body: some Scene {
         WindowGroup("Latch") {
@@ -20,6 +21,12 @@ struct LatchApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1000, height: 640)
         .commands {
+            CommandGroup(after: .appInfo) {
+                if updater.isAvailable {
+                    Button(localized("Rechercher les mises à jour…")) { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 Button(localized("Nouvelle session")) { app.newShortcut() }
                     .keyboardShortcut("n")
@@ -37,6 +44,7 @@ struct LatchApp: App {
         Settings {
             SettingsView()
                 .environmentObject(app)
+                .environmentObject(updater)
                 .preferredColorScheme(.dark)
                 // Une scène à part : la locale de ContentView ne l'atteint pas.
                 .environment(\.locale, Locale(identifier: app.store.preferences.language.resolved))

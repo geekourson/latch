@@ -13,6 +13,7 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject private var app: AppState
+    @EnvironmentObject private var updater: Updater
     @State private var importError: String?
 
     private var store: SessionStore { app.store }
@@ -26,6 +27,25 @@ struct SettingsView: View {
                     }
                 }
                 Text("Le changement s'applique tout de suite.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Color.latchTextFaint)
+            }
+
+            Section("Mises à jour") {
+                Toggle("Rechercher et installer automatiquement", isOn: Binding(
+                    get: { updater.automaticallyChecksForUpdates },
+                    set: { updater.automaticallyChecksForUpdates = $0 }
+                ))
+                .disabled(!updater.isAvailable)
+                HStack {
+                    Text("Version \(Self.version)")
+                        .foregroundStyle(Color.latchTextFaint)
+                    Spacer()
+                    Button("Rechercher maintenant") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
+                Text.paragraph("Une mise à jour se télécharge en arrière-plan et "
+                    + "s'installe à la fermeture de Latch : aucun onglet n'est coupé.")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Color.latchTextFaint)
             }
@@ -108,6 +128,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 520)
+    }
+
+    private static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
 
     // MARK: Liaisons

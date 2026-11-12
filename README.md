@@ -217,6 +217,18 @@ du terminal :
   elles s'ouvrent sans détour. Une compilation locale est signée localement,
   et n'est pas bloquée sur la machine qui l'a produite.
 
+### Mises à jour
+
+Depuis la v0.12.8, Latch se met à jour seul. Il vérifie chaque jour la
+dernière release, la télécharge en arrière-plan et l'installe à la fermeture,
+sans couper d'onglet. La recherche se lance aussi à la main (menu **Latch →
+Rechercher les mises à jour…**) et se désactive dans les Réglages. Chaque
+archive est signée en EdDSA : une archive que la clé de l'app ne vérifie pas
+est refusée.
+
+Les versions antérieures à la v0.12.8 n'ont pas ce mécanisme : la v0.12.8
+s'installe à la main, une fois.
+
 ### Ouvrir une version non notarisée
 
 Les releases antérieures à la v0.12.1 ne sont pas notarisées. Glissez d'abord `Latch.app` sur **Applications** : lancée depuis le disque

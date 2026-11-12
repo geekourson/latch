@@ -55,6 +55,8 @@ final class LocalizationTests: XCTestCase {
             // Réglages
             "Langue", "Interface", "Police", "Thème", "Palette", "Ligatures",
             "Importer un thème…", "Braise (intégré)",
+            "Mises à jour", "Rechercher les mises à jour…", "Rechercher maintenant",
+            "Rechercher et installer automatiquement",
             // Panneau du §6
             "Diagnostic", "Distribution inconnue", "Pare-feu — optionnel",
             "Exécuter dans un panneau", "Copier", "Installer",
@@ -79,6 +81,7 @@ final class LocalizationTests: XCTestCase {
             "Formats acceptés : .itermcolors (iTerm2) et les schémas base16 en .yaml.",
             "Ils font remonter l'activité de Claude Code : l'indicateur, le fichier en cours, et une notification quand une permission est attendue.",
             "Les hooks existants de ~/.claude/settings.json sont conservés, et une copie est mise de côté avant modification.",
+            "Une mise à jour se télécharge en arrière-plan et s'installe à la fermeture de Latch : aucun onglet n'est coupé.",
             "Le jeton est tiré à chaque lancement de Latch : relancer l'app invalide l'accès précédent, et cette commande est à rejouer.",
         ]
         let missing = paragraphs.filter { translation(of: $0, in: english) == nil }

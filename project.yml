@@ -11,6 +11,10 @@ packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm
     from: 1.20.0
+  # Mises à jour automatiques : flux signé EdDSA, installé à la fermeture.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
 
 settings:
   base:
@@ -19,7 +23,6 @@ settings:
     # échafaudage disproportionné pour la v0.1. À resserrer plus tard.
     SWIFT_VERSION: "5.0"
     MARKETING_VERSION: "0.12.7"
-    CURRENT_PROJECT_VERSION: "1"
     ALWAYS_SEARCH_USER_PATHS: NO
     CLANG_ENABLE_OBJC_ARC: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
@@ -33,13 +36,18 @@ targets:
     dependencies:
       - package: SwiftTerm
         product: SwiftTerm
+      - package: Sparkle
+        product: Sparkle
     info:
       path: Generated/Info.plist
       properties:
         CFBundleName: Latch
         CFBundleDisplayName: Latch
         CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Sparkle compare les versions par `CFBundleVersion` : figé à « 1 »,
+        # il tenait toutes les releases pour identiques et n'en proposait
+        # aucune. Une seule numérotation, celle qu'on lit.
+        CFBundleVersion: $(MARKETING_VERSION)
         CFBundlePackageType: APPL
         CFBundleDevelopmentRegion: fr
         CFBundleLocalizations: [fr, en]
@@ -53,6 +61,16 @@ targets:
         NSHumanReadableCopyright: "MIT — Billy Girboux"
         # Pas d'agent : Latch a une fenêtre principale.
         LSUIElement: false
+        # Le flux est publié avec chaque release (workflow Release). L'URL
+        # « latest » de GitHub suit toujours la dernière, sans serveur.
+        SUFeedURL: https://github.com/geekourson/latch/releases/latest/download/appcast.xml
+        SUPublicEDKey: s6GS1AmmGKkAW3DRx2wMFuU+BST6BfXIzwg5HXP51CE=
+        # Accordé d'office, sans la question que Sparkle pose au deuxième
+        # lancement ; le réglage reste dans les Réglages de Latch.
+        SUEnableAutomaticChecks: true
+        # Téléchargée en silence, la mise à jour s'installe à la fermeture :
+        # aucun onglet n'est coupé pour elle.
+        SUAutomaticallyUpdate: true
     postBuildScripts:
       # SPEC §7 : les binaires publiés embarquent mosh-client. La CI le compile
       # et le pose dans build/mosh ; en local, on le prend dans Vendor/ s'il y
