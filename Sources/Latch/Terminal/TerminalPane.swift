@@ -190,16 +190,17 @@ final class PaddedTerminalView: NSView {
 /// sélectionner. Il se déclare donc contenu, jamais fond.
 ///
 /// Latch active la souris de tmux pour que la molette fasse défiler son
-/// historique (voir `AppState.prepareSession`). tmux réclamerait alors aussi le
-/// cliquer-glisser, et la sélection passerait dans son tampon au lieu du
-/// presse-papiers. Le bouton gauche reste donc au terminal : la souris n'est
-/// rapportée à tmux qu'en dehors d'un clic — la molette, en somme.
+/// historique (voir `AppState.prepareSession`). Le cliquer-glisser lui revient
+/// aussi : l'historique ne vit que dans tmux, et seule sa sélection sait y
+/// descendre en défilant toute seule. Au relâchement, tmux copie dans le
+/// presse-papiers du Mac par OSC 52.
 ///
-/// Ni pendant qu'une sélection est affichée : tant que la souris est rapportée,
-/// SwiftTerm efface la sélection à chaque sortie reçue. Sous une session qui
-/// redessine sans arrêt — le spinner de Claude —, elle disparaissait avant
-/// qu'on ait pu la copier. La molette retrouve tmux dès que la sélection
-/// tombe : clic, frappe, redimensionnement.
+/// ⌥ garde la sélection au terminal, celle d'un terminal ordinaire — ⇧ aussi,
+/// par convention de SwiftTerm. Tant qu'elle est affichée, la souris n'est
+/// plus rapportée : SwiftTerm efface sinon la sélection à chaque sortie
+/// reçue, et sous une session qui redessine sans arrêt — le spinner de
+/// Claude —, elle disparaissait avant qu'on ait pu la copier. tmux retrouve
+/// la souris dès qu'elle tombe : clic, frappe, redimensionnement.
 final class SelectableTerminalView: TerminalView {
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -207,7 +208,8 @@ final class SelectableTerminalView: TerminalView {
 
     override func mouseDown(with event: NSEvent) {
         isPressed = true
-        allowMouseReporting = false
+        // Le geste entier va au même endroit : on décide à l'appui, une fois.
+        allowMouseReporting = !selectionActive && !event.modifierFlags.contains(.option)
         super.mouseDown(with: event)
     }
 
@@ -223,7 +225,8 @@ final class SelectableTerminalView: TerminalView {
     }
 
     private func updateMouseReporting() {
-        allowMouseReporting = !isPressed && !selectionActive
+        guard !isPressed else { return }
+        allowMouseReporting = !selectionActive
     }
 
     /// ⌘⌫ efface la ligne, comme dans Terminal : AppKit le traduit en

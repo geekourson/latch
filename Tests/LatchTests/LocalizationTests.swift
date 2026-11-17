@@ -57,6 +57,7 @@ final class LocalizationTests: XCTestCase {
             "Importer un thème…", "Braise (intégré)",
             "Mises à jour", "Rechercher les mises à jour…", "Rechercher maintenant",
             "Rechercher et installer automatiquement",
+            "Copier l'historique de la fenêtre", "L'historique de cette fenêtre n'a pas pu être lu.",
             // Panneau du §6
             "Diagnostic", "Distribution inconnue", "Pare-feu — optionnel",
             "Exécuter dans un panneau", "Copier", "Installer",
@@ -92,7 +93,7 @@ final class LocalizationTests: XCTestCase {
     /// `%@` produit un texte amputé à l'exécution.
     func testFormatsKeepTheirPlaceholders() throws {
         let english = try bundle("en")
-        for key in ["%@ absent", "%@ hors PATH", "1 fenêtre", "%d fenêtres", "il y a %d h"] {
+        for key in ["%@ absent", "%@ hors PATH", "1 fenêtre", "%d fenêtres", "il y a %d h", "%d lignes copiées"] {
             let value = try XCTUnwrap(translation(of: key, in: english), "clé absente : \(key)")
             for token in ["%@", "%d"] where key.contains(token) {
                 XCTAssertTrue(value.contains(token), "« \(value) » a perdu son \(token)")

@@ -25,6 +25,8 @@ final class AppState: ObservableObject {
     @Published var upgradingTarget: UpgradeTarget?
     /// Erreur de validation ou d'ouverture, affichée sans bloquer.
     @Published var errorMessage: String?
+    /// Une confirmation brève, posée sur le terminal puis retirée d'elle-même.
+    @Published private(set) var transientNotice: String?
 
     /// Ce que les hooks du §10 racontent, par hôte puis par session Claude.
     @Published private(set) var claudeRosters: [String: ClaudeRoster] = [:]
@@ -411,6 +413,37 @@ final class AppState: ObservableObject {
     func newWindowInSelectedSession() {
         guard let current = selectedSession else { return }
         newWindow(inSession: current.session, on: current.host)
+    }
+
+    /// Une fenêtre tmux est au premier plan : son historique peut se copier.
+    var canCopyHistory: Bool { selectedSession != nil }
+
+    /// ⇧⌘C : tout l'historique de la fenêtre tmux au premier plan, dans le
+    /// presse-papiers. La sélection à la souris s'arrête à ce que tmux affiche ;
+    /// l'historique, lui, ne vit que dans tmux, et c'est à lui qu'on le demande.
+    func copySelectedHistory() {
+        guard let current = selectedSession,
+              let inspector = inspectors[current.host] else { return }
+        Task {
+            guard let text = await inspector.history(ofSession: current.session),
+                  !text.isEmpty else {
+                errorMessage = localized("L'historique de cette fenêtre n'a pas pu être lu.")
+                return
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            let lines = text.components(separatedBy: "\n").count
+            showNotice(String(format: localized("%d lignes copiées"), lines))
+        }
+    }
+
+    private func showNotice(_ notice: String) {
+        transientNotice = notice
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard self?.transientNotice == notice else { return }
+            self?.transientNotice = nil
+        }
     }
 
     /// ⇧⌘] et ⇧⌘[ : passer d'une fenêtre à l'autre sans la souris, en

@@ -27,6 +27,11 @@ struct LatchApp: App {
                         .disabled(!updater.canCheckForUpdates)
                 }
             }
+            CommandGroup(after: .pasteboard) {
+                Button(localized("Copier l'historique de la fenêtre")) { app.copySelectedHistory() }
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
+                    .disabled(!app.canCopyHistory)
+            }
             CommandGroup(replacing: .newItem) {
                 Button(localized("Nouvelle session")) { app.newShortcut() }
                     .keyboardShortcut("n")

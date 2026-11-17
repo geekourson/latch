@@ -21,6 +21,16 @@ final class TmuxInspectorTests: XCTestCase {
         fields.joined(separator: separator)
     }
 
+    /// tmux rend l'écran entier, lignes vides sous la dernière écrite
+    /// comprises : elles n'ont rien à faire dans le presse-papiers.
+    func testCopiedHistoryDropsTheEmptyScreenBelow() {
+        XCTAssertEqual(
+            TmuxInspector.trimmingTrailingBlankLines("  un\n\ndeux  \n\n   \n"),
+            "  un\n\ndeux  "
+        )
+        XCTAssertEqual(TmuxInspector.trimmingTrailingBlankLines("\n\n"), "")
+    }
+
     func testParsesAWindowLine() throws {
         let window = try XCTUnwrap(
             TmuxInspector.parse(line: line("api", "2", "logs", "1", "journalctl"))

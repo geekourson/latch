@@ -21,26 +21,69 @@ final class TerminalPaneTests: XCTestCase {
         XCTAssertFalse(pane.mouseDownCanMoveWindow, "la marge fait partie du terminal")
     }
 
-    /// La souris de tmux est activée pour la molette ; le clic gauche, lui,
-    /// reste au terminal pendant tout le geste, puis la molette retrouve tmux.
-    func testALeftClickSelectsLocallyThenTheWheelGoesBackToTmux() throws {
+    /// Ce que le terminal envoie à l'application : ici, à tmux.
+    private final class Recorder: NSObject, TerminalViewDelegate {
+        var sent = Data()
+        func send(source: TerminalView, data: ArraySlice<UInt8>) { sent.append(contentsOf: data) }
+        func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+        func setTerminalTitle(source: TerminalView, title: String) {}
+        func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
+        func scrolled(source: TerminalView, position: Double) {}
+        func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {}
+        func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
+        func clipboardCopy(source: TerminalView, content: Data) {}
+    }
+
+    private func mouseEvent(
+        _ type: NSEvent.EventType, x: CGFloat = 10, modifiers: NSEvent.ModifierFlags = []
+    ) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(
+            with: type, location: NSPoint(x: x, y: 10), modifierFlags: modifiers,
+            timestamp: 0, windowNumber: 0, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1
+        ))
+    }
+
+    /// Un terminal où tmux a demandé la souris, comme avec `mouse on`.
+    private func terminalUnderTmux() -> (TerminalView, Recorder) {
         let pane = PaddedTerminalView(inset: 0)
         pane.frame = NSRect(x: 0, y: 0, width: 400, height: 200)
         pane.layout()
         let terminal = pane.terminalView
+        let recorder = Recorder()
+        terminal.terminalDelegate = recorder
+        terminal.feed(text: "\u{1b}[?1002h\u{1b}[?1006h")
+        return (terminal, recorder)
+    }
 
-        func event(_ type: NSEvent.EventType) throws -> NSEvent {
-            try XCTUnwrap(NSEvent.mouseEvent(
-                with: type, location: NSPoint(x: 10, y: 10), modifierFlags: [],
-                timestamp: 0, windowNumber: 0, context: nil,
-                eventNumber: 0, clickCount: 1, pressure: 1
-            ))
-        }
+    /// Le glisser va à tmux : seule sa sélection descend dans l'historique.
+    func testADragGoesToTmuxSoItCanScrollThroughTheHistory() throws {
+        let (terminal, recorder) = terminalUnderTmux()
 
+        terminal.mouseDown(with: try mouseEvent(.leftMouseDown))
+        terminal.mouseDragged(with: try mouseEvent(.leftMouseDragged, x: 80))
+        terminal.mouseUp(with: try mouseEvent(.leftMouseUp, x: 80))
+
+        XCTAssertTrue(String(decoding: recorder.sent, as: UTF8.self).contains("\u{1b}[<"),
+                      "tmux doit recevoir l'appui, le glisser et le relâchement")
+        XCTAssertFalse(terminal.selectionActive)
         XCTAssertTrue(terminal.allowMouseReporting)
-        terminal.mouseDown(with: try event(.leftMouseDown))
+    }
+
+    /// ⌥ garde la sélection au terminal, sans rien envoyer à tmux ; la souris
+    /// lui revient quand la sélection tombe.
+    func testOptionDragSelectsLocally() throws {
+        let (terminal, recorder) = terminalUnderTmux()
+        terminal.feed(text: "à copier\r\n")
+
+        terminal.mouseDown(with: try mouseEvent(.leftMouseDown, modifiers: .option))
         XCTAssertFalse(terminal.allowMouseReporting, "tmux ne doit pas voler la sélection")
-        terminal.mouseUp(with: try event(.leftMouseUp))
+        terminal.mouseUp(with: try mouseEvent(.leftMouseUp, modifiers: .option))
+        XCTAssertTrue(recorder.sent.isEmpty, "rien ne doit partir vers tmux")
+
+        terminal.selectAll()
+        XCTAssertFalse(terminal.allowMouseReporting)
+        terminal.selectNone()
         XCTAssertTrue(terminal.allowMouseReporting, "la molette doit revenir à tmux")
     }
 

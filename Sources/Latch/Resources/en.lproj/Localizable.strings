@@ -247,3 +247,8 @@
 "Version %@" = "Version %@";
 "Rechercher maintenant" = "Check Now";
 "Une mise à jour se télécharge en arrière-plan et s'installe à la fermeture de Latch : aucun onglet n'est coupé." = "An update downloads in the background and installs when Latch quits: no tab is cut off.";
+
+/* --- Historique --- */
+"Copier l'historique de la fenêtre" = "Copy Window History";
+"L'historique de cette fenêtre n'a pas pu être lu." = "This window's history could not be read.";
+"%d lignes copiées" = "%d lines copied";

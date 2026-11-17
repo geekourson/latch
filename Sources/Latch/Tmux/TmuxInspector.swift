@@ -566,7 +566,46 @@ final class TmuxInspector: ObservableObject {
         run(["kill-session", "-t", name])
     }
 
+    /// L'historique entier du panneau actif d'une session, tel que tmux le
+    /// garde : la sélection du terminal ne voit que l'écran, l'historique vit
+    /// de l'autre côté. `-J` recolle les lignes que la largeur avait coupées.
+    func history(ofSession session: String) async -> String? {
+        guard let task = process(["capture-pane", "-p", "-J", "-S", "-", "-E", "-",
+                                  "-t", session + ":"]) else { return nil }
+        let out = Pipe()
+        task.standardOutput = out
+        task.standardError = FileHandle.nullDevice
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard (try? task.run()) != nil else { return continuation.resume(returning: nil) }
+                let data = out.fileHandleForReading.readDataToEndOfFile()
+                task.waitUntilExit()
+                guard task.terminationStatus == 0 else { return continuation.resume(returning: nil) }
+                continuation.resume(returning: Self.trimmingTrailingBlankLines(
+                    String(decoding: data, as: UTF8.self)
+                ))
+            }
+        }
+    }
+
+    /// L'écran n'est pas toujours plein : sous la dernière ligne écrite, tmux
+    /// rend des lignes vides qui n'ont rien à faire dans le presse-papiers.
+    nonisolated static func trimmingTrailingBlankLines(_ text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        while let last = lines.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+            lines.removeLast()
+        }
+        return lines.joined(separator: "\n")
+    }
+
     private func run(_ arguments: [String]) {
+        guard let task = process(arguments) else { return }
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+    }
+
+    private func process(_ arguments: [String]) -> Process? {
         let task = Process()
         if let alias {
             let remote = (["tmux"] + arguments).map(ShellQuoting.quoted).joined(separator: " ")
@@ -575,13 +614,11 @@ final class TmuxInspector: ObservableObject {
                 ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
                 + sharedChannelOptions + [alias, remote]
         } else {
-            guard let tmux = localTmux else { return }
+            guard let tmux = localTmux else { return nil }
             task.executableURL = URL(fileURLWithPath: tmux)
             task.arguments = arguments
         }
-        task.standardOutput = FileHandle.nullDevice
-        task.standardError = FileHandle.nullDevice
-        try? task.run()
+        return task
     }
 
     /// Bascule la session distante sur cette fenêtre. Le terminal attaché suit

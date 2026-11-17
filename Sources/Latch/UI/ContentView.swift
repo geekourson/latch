@@ -86,6 +86,19 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .bottomTrailing) {
+            if let notice = app.transientNotice {
+                Text(notice)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color.latchTextDim)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.latchBackground))
+                    .padding(12)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.16), value: app.transientNotice)
     }
 }
 
