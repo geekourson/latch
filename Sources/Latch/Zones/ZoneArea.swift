@@ -13,8 +13,7 @@
 //  l'ancienne place.
 //
 //  Trois couches : le décor des zones (cadre, barre de titre, zone vide), les
-//  terminaux, puis ce qui se pose par-dessus (séparateurs, cible d'un clic,
-//  cible d'un dépôt).
+//  terminaux, puis ce qui se pose par-dessus (séparateurs, cible d'un dépôt).
 //
 
 import AppKit
@@ -51,13 +50,6 @@ struct ZoneArea: View {
 
                 ForEach(geometry.dividers, id: \.splitID) { divider in
                     DividerHandle(divider: divider)
-                }
-
-                if let preview = app.previewedTarget, let frame = geometry.zones[preview.zoneID] {
-                    TargetOutline(label: preview.label, refused: false)
-                        .frame(width: frame.width, height: frame.height)
-                        .position(x: frame.midX, y: frame.midY)
-                        .allowsHitTesting(false)
                 }
 
                 if let hint = app.dropHint, let frame = geometry.zones[hint.zoneID] {
@@ -408,62 +400,109 @@ private struct DividerHandle: View {
 
     @State private var isHovering = false
     @State private var isDragging = false
-    /// Le curseur posé par ce séparateur, à retirer une fois et une seule.
-    @State private var pushedCursor = false
 
     private var isVertical: Bool { divider.axis == .horizontal }
 
     var body: some View {
         let frame = divider.frame
-        // Tout ce qui écoute la souris s'accroche AVANT `.position` : après,
-        // le survol, le glisser et l'infobulle couvraient toute la place des
-        // zones — curseur bloqué, clics changés en redimensionnement, molette
-        // perdue pour les terminaux.
-        ZStack {
-            Color.clear
+        // La poignée est une vue AppKit : une vue SwiftUI transparente compte
+        // pour du fond de fenêtre, et la fenêtre se déplace par son fond — le
+        // glisser emportait la fenêtre entière au lieu du séparateur.
+        DividerGrip(
+            isVertical: isVertical,
+            onHover: { isHovering = $0 },
+            onDrag: { location in
+                isDragging = true
+                // La poignée donne sa position dans son propre cadre.
+                let container = divider.container
+                let ratio = isVertical
+                    ? ZoneLayout.ratio(at: frame.minX + location.x - container.minX, along: container.width)
+                    : ZoneLayout.ratio(at: frame.minY + location.y - container.minY, along: container.height)
+                app.setRatio(ratio, ofSplit: divider.splitID)
+            },
+            onEnd: { isDragging = false },
+            onDoubleClick: { app.setRatio(0.5, ofSplit: divider.splitID) }
+        )
+        .overlay {
             Rectangle()
                 .fill(isHovering || isDragging ? Color.latchAccent : Color.clear)
                 .frame(width: isVertical ? 2 : nil, height: isVertical ? nil : 2)
+                .allowsHitTesting(false)
         }
         .frame(width: frame.width, height: frame.height)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovering = hovering
-            setCursor(hovering)
-        }
-        .onDisappear { setCursor(false) }
-        .gesture(
-            DragGesture(minimumDistance: 1, coordinateSpace: .named("zones"))
-                .onChanged { value in
-                    isDragging = true
-                    let container = divider.container
-                    let ratio = isVertical
-                        ? ZoneLayout.ratio(at: value.location.x - container.minX, along: container.width)
-                        : ZoneLayout.ratio(at: value.location.y - container.minY, along: container.height)
-                    app.setRatio(ratio, ofSplit: divider.splitID)
-                }
-                .onEnded { _ in isDragging = false }
-        )
-        // Le double-clic remet les deux côtés à parts égales.
-        .simultaneousGesture(TapGesture(count: 2).onEnded {
-            app.setRatio(0.5, ofSplit: divider.splitID)
-        })
         .help("Glisser pour redimensionner · double-clic : parts égales")
         .position(x: frame.midX, y: frame.midY)
     }
+}
 
-    private func setCursor(_ on: Bool) {
-        guard on != pushedCursor else { return }
-        pushedCursor = on
-        if on {
-            (isVertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
-        } else {
-            NSCursor.pop()
+/// Le séparateur côté AppKit : son curseur, son survol et son glisser. Les
+/// coordonnées remises vont de haut en bas, comme celles de SwiftUI.
+private struct DividerGrip: NSViewRepresentable {
+    let isVertical: Bool
+    let onHover: (Bool) -> Void
+    let onDrag: (CGPoint) -> Void
+    let onEnd: () -> Void
+    let onDoubleClick: () -> Void
+
+    func makeNSView(context: Context) -> GripView {
+        let view = GripView()
+        update(view)
+        return view
+    }
+
+    func updateNSView(_ nsView: GripView, context: Context) {
+        update(nsView)
+    }
+
+    private func update(_ view: GripView) {
+        if view.isVertical != isVertical {
+            view.isVertical = isVertical
+            view.window?.invalidateCursorRects(for: view)
         }
+        view.onHover = onHover
+        view.onDrag = onDrag
+        view.onEnd = onEnd
+        view.onDoubleClick = onDoubleClick
+    }
+
+    final class GripView: NSView {
+        var isVertical = true
+        var onHover: (Bool) -> Void = { _ in }
+        var onDrag: (CGPoint) -> Void = { _ in }
+        var onEnd: () -> Void = {}
+        var onDoubleClick: () -> Void = {}
+
+        override var isFlipped: Bool { true }
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: isVertical ? .resizeLeftRight : .resizeUpDown)
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(NSTrackingArea(
+                rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                owner: self))
+        }
+
+        override func mouseEntered(with event: NSEvent) { onHover(true) }
+        override func mouseExited(with event: NSEvent) { onHover(false) }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 2 { onDoubleClick() }
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            onDrag(convert(event.locationInWindow, from: nil))
+        }
+
+        override func mouseUp(with event: NSEvent) { onEnd() }
     }
 }
 
-// MARK: - Cible d'un clic ou d'un dépôt
+// MARK: - Cible d'un dépôt
 
 private struct TargetOutline: View {
     let label: String

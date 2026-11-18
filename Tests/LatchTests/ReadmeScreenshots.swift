@@ -176,7 +176,6 @@ final class ReadmeScreenshots: XCTestCase {
         // d'un verrou s'efface.
         try await Task.sleep(for: .seconds(3))
         beforeCapture()
-        app.preview(nil)
         try await Task.sleep(for: .milliseconds(400))
 
         window.contentView?.layoutSubtreeIfNeeded()

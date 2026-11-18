@@ -232,7 +232,6 @@ private struct ShortcutRow: View {
 
     var body: some View {
         Button {
-            app.preview(nil)
             // ⌥-clic : à côté, comme le bouton qui apparaît au survol.
             if NSEvent.modifierFlags.contains(.option) {
                 app.showBeside(item)
@@ -294,10 +293,8 @@ private struct ShortcutRow: View {
             : shortcut.connection.tmuxSession)
         .onHover { hovering in
             isHovering = hovering
-            app.preview(hovering ? item : nil)
         }
         .onDrag {
-            app.preview(nil)
             app.draggedItem = item
             return NSItemProvider(object: shortcut.displayName as NSString)
         }
@@ -511,7 +508,6 @@ private struct PanelRow: View {
 
     var body: some View {
         Button {
-            app.preview(nil)
             if NSEvent.modifierFlags.contains(.option) {
                 app.showBeside(.tab(session.id))
             } else {
@@ -554,10 +550,8 @@ private struct PanelRow: View {
         .help(session.host.isEmpty ? localized("ce Mac") : session.host)
         .onHover { hovering in
             isHovering = hovering
-            app.preview(hovering ? .tab(session.id) : nil)
         }
         .onDrag {
-            app.preview(nil)
             app.draggedItem = .tab(session.id)
             return NSItemProvider(object: session.title as NSString)
         }
@@ -575,7 +569,6 @@ private struct OpenBesideButton: View {
 
     var body: some View {
         Button {
-            app.preview(nil)
             app.showBeside(item)
         } label: {
             Image(systemName: "rectangle.split.2x1")

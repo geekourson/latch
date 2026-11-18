@@ -304,9 +304,6 @@
 "1 terminal reste ouvert hors de l'écran." = "1 terminal stays open off screen.";
 "%d terminaux restent ouverts hors de l'écran." = "%d terminals stay open off screen.";
 "Déjà à l'écran : sa zone est activée." = "Already on screen: its zone is now active.";
-"%@ est ici" = "%@ is here";
-"%@ s'affichera ici" = "%@ will show here";
-"Toutes les zones sont verrouillées : %@ ouvrira une nouvelle zone ici" = "Every zone is locked: %@ will open a new zone here";
 "Déjà dans cette zone" = "Already in this zone";
 "Zone verrouillée · dépose sur un bord pour la couper" = "Locked zone · drop on an edge to split it";
 "Remplacer %@ par %@" = "Replace %@ with %@";

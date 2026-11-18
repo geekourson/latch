@@ -410,13 +410,15 @@ NSWorkspace.shared.notificationCenter.addObserver(
     superposés, quatre, six (3 × 2) et huit (4 × 2). Grisées si chaque
     colonne aurait moins de 220 points.
   - Chaque zone a sa barre de titre (session, hôte) et ses actions :
-    verrouiller (⌥⌘L), couper à droite (⌘D), en dessous (⇧⌘D), agrandir
-    (⇧⌘↩), fermer (⌘W). Seule à l'écran, elle n'a ni cadre ni barre : ses
-    actions sont dans la bande du haut.
+    verrouiller (⌥⌘L), agrandir (⇧⌘↩), fermer (⌘W). Le découpage se choisit
+    dans les dispositions ; couper à droite (⌘D) et en dessous (⇧⌘D) restent
+    au menu Zones. Seule à l'écran, elle n'a ni cadre ni barre : ses actions
+    sont dans la bande du haut. Les séparateurs sont des vues AppKit : une
+    vue SwiftUI transparente compterait pour du fond, et glisser déplacerait
+    la fenêtre.
   - Un clic dans la barre latérale affiche la session dans la zone active ;
     verrouillée, dans la dernière zone non verrouillée ; tout verrouillé, la
-    plus grande zone se coupe. Au survol, la zone qui recevra le clic
-    s'entoure de pointillés. « Ouvrir à côté » (bouton au survol, ⌥-clic)
+    plus grande zone se coupe. « Ouvrir à côté » (bouton au survol, ⌥-clic)
     coupe la zone active.
   - Glisser une session sur une zone : au centre elle la remplace (refusé si
     la zone est verrouillée), sur un bord elle la coupe de ce côté.

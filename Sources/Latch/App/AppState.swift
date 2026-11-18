@@ -26,8 +26,6 @@ final class AppState: ObservableObject {
     @Published var focusedZoneID: Zone.ID
     /// La zone agrandie à toute la place, les autres attendant derrière.
     @Published var zoomedZoneID: Zone.ID?
-    /// La zone qu'un clic dans la barre latérale remplirait, montrée au survol.
-    @Published var previewedTarget: ZonePreview?
     /// Ce que montrerait un dépôt en cours de glisser.
     @Published var dropHint: ZoneDropHint?
     /// Ce qu'on glisse depuis la barre latérale, le temps du geste.

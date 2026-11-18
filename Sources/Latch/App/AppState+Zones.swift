@@ -31,11 +31,6 @@ struct ZoneDropHint: Equatable {
     let label: String
 }
 
-struct ZonePreview: Equatable {
-    let zoneID: Zone.ID
-    let label: String
-}
-
 /// Où irait un terminal qu'on affiche sans préciser de zone.
 enum ZoneTarget: Equatable {
     /// Il est déjà à l'écran : sa zone devient active.
@@ -281,22 +276,6 @@ extension AppState {
         }
         guard let fresh = splitZone(focusedZoneID, axis: .horizontal) else { return }
         show(item, in: fresh)
-    }
-
-    /// Le survol d'une ligne montre la zone que remplirait un clic.
-    func preview(_ item: SidebarItem?) {
-        guard let item else { previewedTarget = nil; return }
-        let name = name(of: item)
-        switch target(for: session(for: item)?.id) {
-        case .existing(let id):
-            previewedTarget = ZonePreview(zoneID: id, label: String(format: localized("%@ est ici"), name))
-        case .replace(let id):
-            previewedTarget = ZonePreview(zoneID: id, label: String(format: localized("%@ s'affichera ici"), name))
-        case .split(let id, _):
-            previewedTarget = ZonePreview(
-                zoneID: id,
-                label: String(format: localized("Toutes les zones sont verrouillées : %@ ouvrira une nouvelle zone ici"), name))
-        }
     }
 
     // MARK: - Glisser-déposer
