@@ -85,6 +85,19 @@ struct TerminalPane: NSViewRepresentable {
         container.needsLayout = true
     }
 
+    /// Ce qu'une demande de presse-papiers (OSC 52) peut y écrire.
+    ///
+    /// Un clic dans le vide d'un terminal fait entrer tmux en mode copie sur
+    /// une sélection de blancs ; au relâchement, il la copie — vide — et la
+    /// copie précédente disparaissait du presse-papiers du Mac. Une copie
+    /// sans rien de visible n'est jamais voulue : elle est ignorée.
+    static func clipboardText(from content: Data) -> String? {
+        guard let text = String(data: content, encoding: .utf8),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return text
+    }
+
     static func dismantleNSView(_ nsView: PaddedTerminalView, coordinator: Coordinator) {
         coordinator.detach()
     }
@@ -162,7 +175,7 @@ struct TerminalPane: NSViewRepresentable {
         func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 
         func clipboardCopy(source: TerminalView, content: Data) {
-            guard let text = String(data: content, encoding: .utf8) else { return }
+            guard let text = TerminalPane.clipboardText(from: content) else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
         }

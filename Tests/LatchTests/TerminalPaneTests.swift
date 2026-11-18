@@ -133,6 +133,15 @@ final class TerminalPaneTests: XCTestCase {
         XCTAssertFalse(terminal.performKeyEquivalent(with: try key([.command, .option])))
         XCTAssertEqual(spy.bytes, [0x15], "⌘⌥⌫ n'est pas concerné")
     }
+
+    /// Un clic dans le vide copie une sélection de blancs : elle n'écrase
+    /// pas la copie précédente.
+    func testABlankCopyLeavesTheClipboardAlone() {
+        XCTAssertNil(TerminalPane.clipboardText(from: Data()))
+        XCTAssertNil(TerminalPane.clipboardText(from: Data("  \n\n \t".utf8)))
+        XCTAssertEqual(TerminalPane.clipboardText(from: Data(" ls -la\n".utf8)), " ls -la\n",
+                       "le texte copié reste tel quel, blancs compris")
+    }
 }
 
 private final class SentBytes: TerminalViewDelegate {
