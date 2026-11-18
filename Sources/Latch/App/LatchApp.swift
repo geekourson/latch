@@ -3,6 +3,7 @@
 //  Latch — « Your sessions, still running. »
 //
 
+import AppKit
 import SwiftUI
 
 @main
@@ -26,6 +27,21 @@ struct LatchApp: App {
                     Button(localized("Rechercher les mises à jour…")) { updater.checkForUpdates() }
                         .disabled(!updater.canCheckForUpdates)
                 }
+            }
+            // ⌘W ferme le terminal au premier plan, comme la croix d'un onglet
+            // le faisait. Ailleurs — les Réglages, ou une fenêtre principale
+            // sans terminal —, il ferme la fenêtre, comme partout sur macOS.
+            CommandGroup(replacing: .saveItem) {
+                Button(localized("Fermer")) {
+                    let window = NSApp.keyWindow
+                    if window?.identifier == WindowChrome.mainWindowIdentifier,
+                       app.selectedTab != nil {
+                        app.closeSelectedTab()
+                    } else {
+                        window?.performClose(nil)
+                    }
+                }
+                .keyboardShortcut("w")
             }
             CommandGroup(after: .pasteboard) {
                 Button(localized("Copier l'historique de la fenêtre")) { app.copySelectedHistory() }

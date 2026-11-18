@@ -651,7 +651,27 @@ final class AppState: ObservableObject {
         return session
     }
 
+    /// Le terminal ouvert sur ce raccourci, s'il y en a un.
+    func tab(for shortcut: Shortcut) -> TerminalSession? {
+        tabs.first { $0.shortcutID == shortcut.id }
+    }
+
+    /// Les terminaux que Latch ouvre lui-même, sans raccourci : l'installeur
+    /// du panneau d'amélioration, la configuration d'une clé. La barre
+    /// latérale est le seul chemin vers un terminal ; ceux-là y ont donc
+    /// leur section, sans quoi on ne pourrait plus y revenir.
+    var panels: [TerminalSession] {
+        tabs.filter { $0.shortcutID == nil }
+    }
+
     // MARK: - Fermeture
+
+    /// ⌘W : ferme le terminal au premier plan. La session tmux, elle, continue
+    /// sur l'hôte — c'est une déconnexion, pas une fermeture de session.
+    func closeSelectedTab() {
+        guard let id = selectedTabID else { return }
+        close(tabID: id)
+    }
 
     func close(tabID: TerminalSession.ID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }

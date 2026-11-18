@@ -21,8 +21,6 @@ struct ContentView: View {
                 // derrière les feux de circulation.
                 Color.latchBackground.frame(height: 28)
 
-                TabBarView()
-
                 if app.currentDegradation.isDegraded {
                     DegradationBanner(
                         degradation: app.currentDegradation,

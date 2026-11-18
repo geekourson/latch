@@ -252,3 +252,8 @@
 "Copier l'historique de la fenêtre" = "Copy Window History";
 "L'historique de cette fenêtre n'a pas pu être lu." = "This window's history could not be read.";
 "%d lignes copiées" = "%d lines copied";
+
+/* --- Barre latérale sans onglets --- */
+"Panneaux" = "Panels";
+"Déconnecter" = "Disconnect";
+"ce Mac" = "this Mac";

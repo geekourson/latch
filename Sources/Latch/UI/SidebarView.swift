@@ -38,6 +38,15 @@ struct SidebarView: View {
                         }
                     }
 
+                    let panels = app.panels
+                    if !panels.isEmpty {
+                        Spacer().frame(height: 14)
+                        PanelsHeader()
+                        ForEach(panels) { session in
+                            PanelRow(session: session)
+                        }
+                    }
+
                     if app.store.servers.isEmpty && loose.isEmpty {
                         EmptySidebar()
                     }
@@ -208,9 +217,7 @@ private struct ShortcutRow: View {
 
     @State private var isHovering = false
 
-    private var isOpen: Bool {
-        app.tabs.contains { $0.shortcutID == shortcut.id }
-    }
+    private var openTab: TerminalSession? { app.tab(for: shortcut) }
 
     private var isSelected: Bool {
         app.selectedTab?.shortcutID == shortcut.id
@@ -237,8 +244,8 @@ private struct ShortcutRow: View {
 
                 Spacer(minLength: 0)
 
-                // Le `+` n'apparaît qu'au survol, comme la croix des onglets :
-                // au repos, la barre reste calme.
+                // Le `+` n'apparaît qu'au survol : au repos, la barre reste
+                // calme.
                 if isHovering {
                     Button {
                         app.newWindow(in: shortcut)
@@ -251,10 +258,9 @@ private struct ShortcutRow: View {
                     }
                     .buttonStyle(.plain)
                     .help("Nouvelle fenêtre")
-                } else if isOpen {
-                    Circle()
-                        .fill(Color.latchSuccess)
-                        .frame(width: 4, height: 4)
+                } else if let openTab {
+                    // L'état de la connexion, que portait l'onglet.
+                    ConnectionDot(session: openTab)
                 }
             }
             .padding(.leading, 15)
@@ -275,6 +281,10 @@ private struct ShortcutRow: View {
         .onHover { isHovering = $0 }
         .contextMenu {
             Button("Nouvelle fenêtre") { app.newWindow(in: shortcut) }
+            // Ferme le terminal, pas la session : tmux continue sur l'hôte.
+            if let openTab {
+                Button("Déconnecter") { app.close(tabID: openTab.id) }
+            }
             Divider()
             Button("Modifier…") { app.editedShortcut = shortcut }
             Button("Supprimer", role: .destructive) {
@@ -461,6 +471,85 @@ private struct OrphanRow: View {
                 )
             )
         }
+    }
+}
+
+// MARK: - Panneaux
+
+/// Un terminal ouvert par Latch, sans raccourci : il n'a pas d'autre accès
+/// que cette ligne. La croix le ferme — il n'y a pas de session tmux derrière.
+private struct PanelRow: View {
+    @EnvironmentObject private var app: AppState
+    @ObservedObject var session: TerminalSession
+
+    @State private var isHovering = false
+
+    private var isSelected: Bool { app.selectedTabID == session.id }
+
+    var body: some View {
+        Button {
+            app.selectedTabID = session.id
+        } label: {
+            HStack(spacing: 6) {
+                Text(session.title)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if isHovering {
+                    Button {
+                        app.close(tabID: session.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 8, weight: .medium))
+                            .foregroundStyle(Color.latchTextDim)
+                            .frame(width: 14, height: 14)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Fermer")
+                } else {
+                    ConnectionDot(session: session)
+                }
+            }
+            .padding(.leading, 15)
+            .padding(.trailing, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isSelected ? Color.latchSurfaceHigh : .clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(session.host.isEmpty ? localized("ce Mac") : session.host)
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            Button("Fermer") { app.close(tabID: session.id) }
+        }
+    }
+}
+
+private struct PanelsHeader: View {
+    var body: some View {
+        Text("Panneaux")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(Color.latchText)
+            .padding(.vertical, 4)
+    }
+}
+
+/// L'état de la connexion d'un terminal ouvert — la pastille que portait son
+/// onglet. Observée à part : la barre latérale ne se redessine pas à chaque
+/// changement d'état d'une session.
+private struct ConnectionDot: View {
+    @ObservedObject var session: TerminalSession
+
+    var body: some View {
+        Circle()
+            .fill(session.connection.dotColor)
+            .frame(width: 5, height: 5)
+            .help(session.connection.label)
     }
 }
 

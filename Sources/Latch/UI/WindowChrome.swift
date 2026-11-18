@@ -16,6 +16,9 @@ import SwiftUI
 
 struct WindowChrome: NSViewRepresentable {
 
+    /// Ce qui distingue la fenêtre principale des Réglages, pour ⌘W.
+    static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("app.latch.main")
+
     func makeNSView(context: Context) -> NSView {
         let view = ChromeView()
         view.isHidden = true
@@ -41,6 +44,7 @@ private final class ChromeView: NSView {
         super.viewDidMoveToWindow()
         guard let window else { return }
 
+        window.identifier = WindowChrome.mainWindowIdentifier
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true

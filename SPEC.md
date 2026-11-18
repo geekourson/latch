@@ -397,8 +397,11 @@ NSWorkspace.shared.notificationCenter.addObserver(
 - Barre latérale ~180 px, **sans bordure** — la séparation se fait par le vide.
   Serveurs en gras, sessions tmux indentées en mono en dessous. Pastille d'état
   par serveur : vert (connecté), ambre (veille / dégradé), gris (hors ligne).
-- Onglets : fond légèrement plus clair pour l'actif, aucun séparateur entre les
-  inactifs.
+- Pas de barre d'onglets : elle doublait la barre latérale, qui ouvre une
+  session ou ramène son terminal au premier plan. La pastille de connexion
+  d'un terminal ouvert est sur la ligne de sa session ; ⌘W et « Déconnecter »
+  ferment le terminal sans toucher à tmux. Les terminaux que Latch ouvre sans
+  raccourci (installeur, clé) ont leur section « Panneaux », en bas.
 - Zone terminal : padding 18–22 px, interligne 1,25 (multiplicateur de la
   hauteur de ligne de la police).
 - Barre d'état basse, très discrète : état Claude Code, branche git, diff,
