@@ -11,14 +11,74 @@ session ouvre un terminal attaché à une session `tmux` sur un serveur, quel qu
 soit l'état de la connexion précédente. Vous fermez le Mac, vous le rouvrez le
 lendemain, la session est là où vous l'aviez laissée.
 
-![Latch : la barre latérale, ses sessions et leurs fenêtres tmux, et la barre d'état](docs/screenshot.png)
+![Latch : quatre terminaux sur trois hôtes, dont un verrouillé, à côté de la barre latérale](docs/screenshot.png)
 
 ## État
 
 **v0.14.0 — bêta.** La feuille de route est parcourue : raccourcis persistés en
-JSON, barre latérale, onglets, écran du builder, import de thèmes, sonde serveur
+JSON, barre latérale, zones, écran du builder, import de thèmes, sonde serveur
 et cascade de dégradation, reconnexion au réveil, drivers de connexion, hooks
-Claude Code, fenêtres tmux réelles et serveur MCP. 353 tests passent.
+Claude Code, fenêtres tmux réelles, serveur MCP et mises à jour automatiques.
+375 tests passent.
+
+### Nouveau : plusieurs terminaux à l'écran
+
+La place des terminaux se découpe en **zones**, chacune avec son terminal. La
+prod à gauche, la machine de calcul à droite, le Mac en bas : des hôtes
+différents côte à côte, ce que tmux, qui découpe une session sur un seul
+serveur, ne sait pas faire.
+
+![Glisser une session sur le bord d'une zone l'ouvre à côté](docs/zones-drop.png)
+
+Tout se fait à la souris, et chaque action est visible :
+
+- **Dispositions toutes faites**, en haut à droite : un terminal, deux côte à
+  côte, deux superposés, quatre, six (3 × 2) et huit (4 × 2). Une disposition
+  se remplit avec ce qui tourne déjà, la zone active en tête.
+- **Une barre de titre par zone** : la session, son hôte, et ses actions —
+  verrouiller, couper à droite, couper en dessous, agrandir, fermer.
+- **Glisser une session** depuis la barre latérale : au centre d'une zone, elle
+  la remplace ; sur un bord, la zone se coupe de ce côté. Un cadre en
+  pointillés dit ce qui va se passer avant qu'on lâche.
+- **Verrouiller une zone** garde son terminal à l'écran : un clic dans la barre
+  latérale va remplir une autre zone. Au survol d'une session, la zone qui la
+  recevra s'entoure de pointillés.
+- **Une zone vide** propose ce qu'elle peut afficher, les terminaux déjà ouverts
+  d'abord.
+
+Les raccourcis existent pour qui les aime — ⌘D, ⇧⌘D, ⇧⌘↩, ⌥⌘L, ⌘W, ⌥⌘ +
+flèches — et chaque bouton les rappelle dans son infobulle.
+
+Un terminal n'est jamais dans deux zones, et changer de disposition ne coupe
+aucune connexion : les vues de terminal restent les mêmes, seul leur cadre
+bouge. Pendant qu'on glisse un séparateur, l'hôte ne reçoit que la taille
+finale, pour que tmux ne redessine pas l'écran à chaque pixel.
+
+Sur un écran large, huit zones tiennent sans se gêner :
+
+![Huit zones, quatre colonnes sur deux rangées](docs/zones-wide.png)
+
+### Nouveau : la barre latérale suffit
+
+La barre d'onglets a disparu : elle doublait la barre latérale, qui ouvre une
+session ou ramène son terminal. La pastille de connexion est sur la ligne de
+la session ; « Déconnecter » ferme le terminal sans toucher à tmux. Les
+terminaux que Latch ouvre lui-même — installeur, configuration d'une clé —
+ont leur section **Panneaux**.
+
+### Nouveau : copier ce que la session a écrit
+
+L'historique d'une session vit dans tmux, pas dans le terminal. Le
+cliquer-glisser lui revient donc : la sélection descend dans l'historique en
+faisant défiler, et part dans le presse-papiers du Mac au relâchement.
+**⌥-glisser** garde la sélection du terminal, qui ne s'efface plus quand la
+session écrit — le spinner de Claude l'emportait avant qu'on ait pu copier.
+**⇧⌘C** copie d'un coup tout l'historique de la fenêtre.
+
+### Nouveau : Latch se met à jour seul
+
+Une nouvelle version se télécharge en arrière-plan et s'installe à la fermeture
+de Latch, signée et vérifiée. Voir [Mises à jour](#mises-à-jour).
 
 ### La barre latérale montre les vraies fenêtres
 
@@ -28,7 +88,7 @@ suit tout seul, c'est tmux qui décide de ce qu'il affiche.
 
 ### Claude Code peut piloter Latch
 
-Un serveur MCP tourne dans l'app et expose quatre outils : lister les onglets,
+Un serveur MCP tourne dans l'app et expose quatre outils : lister les terminaux,
 ouvrir un raccourci, lancer une commande, afficher un fichier. Claude Code, qui
 tourne sur le serveur, l'atteint par un `-R` porté par la connexion des hooks —
 tout passe par le tunnel, rien n'est exposé au réseau.
@@ -65,7 +125,7 @@ vaut mieux qu'un chiffre inventé.
 ### Les pastilles se lisent, elles ne se devinent pas
 
 Six couleurs, pas une de plus, et la même grammaire partout — barre latérale,
-onglets, barre d'état. La légende est dans **Réglages → Repères**, pour ne pas
+zones, barre d'état. La légende est dans **Réglages → Repères**, pour ne pas
 avoir à revenir ici.
 
 | | | |
@@ -95,7 +155,7 @@ boucle silencieuse sur une authentification refusée.
 
 ## Ce que fait Latch
 
-Un clic sur une session dans la barre latérale ouvre un onglet attaché à
+Un clic sur une session dans la barre latérale ouvre un terminal attaché à
 `tmux new -A -s <session>` sur le serveur. `-A` attache si la session existe et
 la crée sinon : il n'y a nulle part de logique « la session existe-t-elle ? »,
 et c'est ce qui rend la reconnexion triviale.
@@ -167,7 +227,7 @@ ligne, **sans `sudo`** : son installeur officiel refuse de tourner sous sudo et
 installe dans `$HOME/.local/bin`.
 
 Latch n'exécute rien de tout ça. Le bouton par défaut est `Copier` ; l'autre
-ouvre un onglet sur l'hôte et y **écrit** la commande sans appuyer sur Entrée,
+ouvre un terminal sur l'hôte et y **écrit** la commande sans appuyer sur Entrée,
 pour que le mot de passe `sudo` soit tapé dans un vrai TTY. Aucun `sudo -S`,
 aucun `sshpass`, aucune installation silencieuse.
 
@@ -202,6 +262,23 @@ xcodebuild -project Latch.xcodeproj -scheme Latch \
            -skipPackagePluginValidation test
 ```
 
+### Captures du README
+
+Les images de `docs/` sont produites par un test, ignoré par défaut :
+
+```bash
+TEST_RUNNER_LATCH_SCREENSHOTS_DIR="$PWD/docs" \
+xcodebuild -project Latch.xcodeproj -scheme Latch \
+           -destination 'platform=macOS' \
+           -skipPackagePluginValidation test \
+           -only-testing:LatchTests/ReadmeScreenshots
+```
+
+C'est la vraie fenêtre, photographiée hors de l'écran, avec de vraies
+sessions — mais sous des noms d'hôte de démo, chacune affichant un contenu
+d'exemple, avec un serveur tmux et un dossier personnel à part. Une capture
+publique ne montre ni vos serveurs ni votre travail.
+
 ## Premier lancement
 
 Deux autorisations macOS peuvent se mettre en travers, et elles ne se voient
@@ -221,7 +298,7 @@ du terminal :
 
 Depuis la v0.12.8, Latch se met à jour seul. Il vérifie chaque jour la
 dernière release, la télécharge en arrière-plan et l'installe à la fermeture,
-sans couper d'onglet. La recherche se lance aussi à la main (menu **Latch →
+sans couper de terminal. La recherche se lance aussi à la main (menu **Latch →
 Rechercher les mises à jour…**) et se désactive dans les Réglages. Chaque
 archive est signée en EdDSA : une archive que la clé de l'app ne vérifie pas
 est refusée.
