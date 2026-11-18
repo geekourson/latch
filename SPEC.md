@@ -445,6 +445,12 @@ NSWorkspace.shared.notificationCenter.addObserver(
     - La barre de titre d'une zone donne la fenêtre affichée ; dans la barre
       latérale, une fenêtre à l'écran est en clair, celle de la zone active
       surlignée.
+    - Un terminal caché ne dicte pas la taille d'une fenêtre. tmux donne à
+      une fenêtre la taille du dernier client qui a reçu une frappe ou changé
+      de taille (`window-size latest`), caché ou non. Chaque terminal laisse
+      donc son tty dans `@latch-client` en s'attachant, et Latch lui pose
+      `refresh-client -f ignore-size` quand il sort de l'écran, `!ignore-size`
+      quand il y revient — et de nouveau après une reconnexion.
   - Pendant qu'on glisse un séparateur, l'hôte ne reçoit que la taille
     finale ; double-clic : parts égales.
 - Zone terminal : padding 18–22 px, interligne 1,25 (multiplicateur de la

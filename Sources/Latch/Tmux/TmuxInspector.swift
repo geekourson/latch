@@ -549,6 +549,38 @@ final class TmuxInspector: ObservableObject {
         run(["set-option", "-t", session, "mouse", "on"])
     }
 
+    /// Un terminal caché ne doit pas dicter la taille d'une fenêtre qu'un
+    /// terminal visible affiche aussi. tmux donne à une fenêtre la taille du
+    /// dernier client qui a reçu une frappe ou changé de taille
+    /// (`window-size latest`), caché ou non : basculer la zone visible sur une
+    /// fenêtre qu'une vue cachée montrait laissait la fenêtre à la taille de
+    /// la vue. `ignore-size` sort le client du calcul tant qu'il est caché.
+    ///
+    /// Le client se retrouve par l'option que son terminal a laissée en
+    /// s'attachant (`CommandBuilder.clientOption`).
+    func setIgnoresSize(_ ignores: Bool, session: String) {
+        let flag = ignores ? "ignore-size" : "!ignore-size"
+        let script: (String) -> String = { tmux in
+            "c=$(\(tmux) show-options -t \(ShellQuoting.quoted(session)) -qv "
+                + "\(CommandBuilder.clientOption)) && [ -n \"$c\" ] && "
+                + "\(tmux) refresh-client -t \"$c\" -f \(ShellQuoting.quoted(flag))"
+        }
+        let task = Process()
+        if let alias {
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+            task.arguments =
+                ["-o", "BatchMode=yes", "-o", "ConnectTimeout=10"]
+                + sharedChannelOptions + [alias, script("tmux")]
+        } else {
+            guard let tmux = localTmux else { return }
+            task.executableURL = URL(fileURLWithPath: "/bin/sh")
+            task.arguments = ["-c", script(ShellQuoting.quoted(tmux))]
+        }
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        try? task.run()
+    }
+
     func newWindow(inSession session: String) {
         run(["new-window", "-t", session + ":"])
     }

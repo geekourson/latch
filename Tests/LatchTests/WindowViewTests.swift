@@ -47,6 +47,20 @@ final class TmuxViewCommandTests: XCTestCase {
         XCTAssertTrue(command.contains("';' select-window"), command)
     }
 
+    /// Le terminal laisse son nom de client en s'attachant, vue ou session.
+    func testTheClientReportsItsName() throws {
+        var view = shortcut(.local)
+        view.connection.reportsClient = true
+        XCTAssertTrue(try CommandBuilder.build(view).hasSuffix(
+            "';' set-option -t 'dev demande~2' -F @latch-client '#{client_tty}'"))
+
+        var plain = Shortcut(name: "", connection: Connection(transport: .local, host: "", tmuxSession: "api"))
+        XCTAssertEqual(try CommandBuilder.build(plain), "tmux new -A -s api", "l'aperçu du builder ne change pas")
+        plain.connection.reportsClient = true
+        XCTAssertEqual(try CommandBuilder.build(plain),
+                       "tmux new -A -s api ';' set-option -t api -F @latch-client '#{client_tty}'")
+    }
+
     /// La vue n'est jamais persistée.
     func testAViewIsNotSaved() throws {
         let data = try JSONEncoder().encode(shortcut(.local))
@@ -205,6 +219,29 @@ final class WindowPlacementTests: XCTestCase {
 
         XCTAssertEqual(state.placement(ofWindow: 2, of: shortcut, in: left), .switchTab(tab.id))
         state.closeAll()
+    }
+
+    /// Un terminal qui sort de l'écran ne dicte plus la taille de ses
+    /// fenêtres ; il la retrouve en revenant.
+    func testHiddenTerminalsIgnoreSize() async {
+        let (state, shortcut) = makeState()
+        let (left, right) = sideBySide(state)
+        let base = attach(state, shortcut, as: "api", in: left)
+        let view = attach(state, shortcut, as: "api~2", in: right)
+        state.syncClientSizes()
+        XCTAssertTrue(state.clientsIgnoringSize.isEmpty)
+
+        state.toggleZoom(left)
+        state.syncClientSizes()
+        XCTAssertEqual(state.clientsIgnoringSize, [view.id])
+
+        state.toggleZoom(left)
+        state.closeZone(left)
+        state.syncClientSizes()
+        XCTAssertEqual(state.clientsIgnoringSize, [base.id])
+        state.closeAll()
+        state.syncClientSizes()
+        XCTAssertTrue(state.clientsIgnoringSize.isEmpty)
     }
 
     /// Les vues ne sont pas des sessions oubliées.

@@ -83,6 +83,9 @@ struct Connection: Codable, Equatable {
     /// Une vue de plus sur la session, le temps d'un terminal : jamais
     /// persistée, absente des clés de codage.
     var view: TmuxView?
+    /// Le terminal note son nom de client tmux dans la session (`@latch-client`),
+    /// pour que Latch puisse ensuite agir sur lui seul. Jamais persisté.
+    var reportsClient = false
 }
 
 /// Une session groupée avec celle du raccourci : les mêmes fenêtres, les mêmes

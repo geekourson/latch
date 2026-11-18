@@ -96,6 +96,10 @@ final class AppState: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+    /// Les terminaux cachés que tmux ne consulte plus pour la taille de leurs
+    /// fenêtres (voir `syncClientSizes`).
+    private(set) var clientsIgnoringSize: Set<TerminalSession.ID> = []
+
     /// Le store est construit ici et pas dans la valeur par défaut du
     /// paramètre : une expression par défaut s'évalue dans l'isolement de
     /// l'appelant, et `SessionStore` est lié à l'acteur principal.
@@ -115,6 +119,13 @@ final class AppState: ObservableObject {
         Localization.apply(store.preferences.language)
 
         observeSystemSleep()
+
+        // Les zones changent : un terminal sort de l'écran, un autre y entre.
+        // Au tour suivant, une fois la valeur publiée.
+        $layout.combineLatest($zoomedZoneID)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.syncClientSizes() }
+            .store(in: &cancellables)
 
         mcp.host = self
         mcp.start()
@@ -191,6 +202,7 @@ final class AppState: ObservableObject {
 
         // Une vue ne crée rien : ni fenêtre déclarée, ni commande initiale.
         var launched = shortcut
+        launched.connection.reportsClient = true
         if let view {
             launched.connection.view = view
             launched.windows = []
@@ -232,6 +244,7 @@ final class AppState: ObservableObject {
     func add(_ session: TerminalSession, in zoneID: Zone.ID? = nil) {
         tabs.append(session)
         show(session.id, in: zoneID)
+        watchReconnections(of: session)
     }
 
     /// SPEC §11 : un mot de passe n'est utilisé que s'il a été rangé dans le
@@ -594,6 +607,48 @@ final class AppState: ObservableObject {
     /// ne peuvent pas ouvrir de connexion ssh.
     func setLiveSessionsForTesting(_ sessions: [LiveSession], on host: String) {
         liveSessions[host] = sessions
+    }
+
+    /// Les terminaux à l'écran : ceux des zones, ou celui de la zone agrandie.
+    var visibleTabIDs: Set<TerminalSession.ID> {
+        if let zoomedZoneID, let zone = layout.zone(zoomedZoneID) {
+            return Set([zone.sessionID].compactMap { $0 })
+        }
+        return Set(layout.zones.compactMap(\.sessionID))
+    }
+
+    /// Un terminal caché ne dicte plus la taille des fenêtres qu'il partage
+    /// avec un terminal visible — une vue et sa session, deux vues : il
+    /// passe `ignore-size` en sortant de l'écran, et le perd en y revenant.
+    func syncClientSizes(forcing forced: TerminalSession.ID? = nil) {
+        let visible = visibleTabIDs
+        for tab in tabs {
+            guard let session = tab.tmuxSession else { continue }
+            let hidden = !visible.contains(tab.id)
+            guard hidden != clientsIgnoringSize.contains(tab.id) || tab.id == forced else { continue }
+            if hidden { clientsIgnoringSize.insert(tab.id) } else { clientsIgnoringSize.remove(tab.id) }
+            inspectors[tab.host]?.setIgnoresSize(hidden, session: session)
+        }
+        clientsIgnoringSize.formIntersection(tabs.map(\.id))
+    }
+
+    /// Une reconnexion rattache un nouveau client, sans le drapeau : un
+    /// terminal caché qui se reconnecte le reprend, le temps que tmux ait vu
+    /// l'attachement.
+    private func watchReconnections(of session: TerminalSession) {
+        guard session.tmuxSession != nil else { return }
+        session.$connection
+            .map(\.isLive)
+            .removeDuplicates()
+            .filter { $0 }
+            .sink { [weak self, weak session] _ in
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(2))
+                    guard let self, let session, self.clientsIgnoringSize.contains(session.id) else { return }
+                    self.syncClientSizes(forcing: session.id)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func setLiveWindowsForTesting(_ windows: [String: [LiveWindow]], on host: String) {

@@ -199,7 +199,22 @@ enum CommandBuilder {
         if let command = sessionCommand(connection, windows: windows, toolPaths: toolPaths) {
             parts.append(ShellQuoting.singleQuoted(command))
         }
+        if connection.reportsClient, !connection.controlMode {
+            parts += clientReport(session: connection.tmuxSession)
+        }
         return parts.joined(separator: " ")
+    }
+
+    /// L'option où le terminal laisse son nom de client — son tty, côté hôte.
+    static let clientOption = "@latch-client"
+
+    /// `';' set-option -t <session> -F @latch-client '#{client_tty}'` : chaîné
+    /// après l'attachement, la commande s'exécute au nom du client qui vient
+    /// d'arriver, et le format se développe en son tty. Rejoué à chaque
+    /// reconnexion, il reste juste.
+    private static func clientReport(session: String) -> [String] {
+        ["';'", "set-option", "-t", ShellQuoting.quoted(session), "-F", clientOption,
+         ShellQuoting.singleQuoted("#{client_tty}")]
     }
 
     /// `tmux new -A -s <vue> -t <session> ';' set-option … ';' select-window …`
@@ -221,6 +236,9 @@ enum CommandBuilder {
         ]
         if let window = view.window {
             parts += ["';'", "select-window", "-t", ShellQuoting.quoted("\(view.name):\(window)")]
+        }
+        if connection.reportsClient {
+            parts += clientReport(session: view.name)
         }
         return parts.joined(separator: " ")
     }
