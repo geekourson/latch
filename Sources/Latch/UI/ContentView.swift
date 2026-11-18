@@ -71,7 +71,9 @@ struct ContentView: View {
         ZoneArea()
             .padding([.horizontal, .bottom], app.layout.isSingle ? 0 : 6)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.latchBackground)
+            // Le fond s'arrête au cadre : par défaut, il déborderait sous la
+            // barre de titre et recouvrirait la bande des dispositions.
+            .background(Color.latchBackground, ignoresSafeAreaEdges: [])
             .overlay(alignment: .bottomTrailing) {
                 if let notice = app.transientNotice {
                     Text(notice)
