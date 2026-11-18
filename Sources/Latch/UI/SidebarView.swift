@@ -225,7 +225,7 @@ private struct ShortcutRow: View {
     }
 
     private var isOnScreen: Bool {
-        openTab.map { app.layout.zone(showing: $0.id) != nil } ?? false
+        app.tabs(of: shortcut).contains { app.layout.zone(showing: $0.id) != nil }
     }
 
     private var item: SidebarItem { .shortcut(shortcut.id) }
@@ -302,8 +302,11 @@ private struct ShortcutRow: View {
             Button("Ouvrir à côté") { app.showBeside(item) }
             Button("Nouvelle fenêtre") { app.newWindow(in: shortcut) }
             // Ferme le terminal, pas la session : tmux continue sur l'hôte.
-            if let openTab {
-                Button("Déconnecter") { app.close(tabID: openTab.id) }
+            // Ses vues partent avec lui.
+            if openTab != nil {
+                Button("Déconnecter") {
+                    app.tabs(of: shortcut).forEach { app.close(tabID: $0.id) }
+                }
             }
             Divider()
             Button("Modifier…") { app.editedShortcut = shortcut }
@@ -314,13 +317,22 @@ private struct ShortcutRow: View {
     }
 }
 
-/// Une fenêtre tmux réelle (§12, v0.4). Cliquer bascule la session distante
-/// dessus ; le terminal suit tout seul, c'est tmux qui décide de ce qu'il
-/// affiche.
+/// Une fenêtre tmux réelle (§12, v0.4). Un clic l'affiche : dans sa zone si
+/// elle est à l'écran, sinon dans la zone de sa session — qui bascule dessus.
+/// Glissée sur une zone, ou ouverte « à côté », elle s'affiche à côté des
+/// autres fenêtres de la même session (voir `AppState+Windows`).
 private struct WindowRow: View {
     @EnvironmentObject private var app: AppState
     let window: LiveWindow
     let host: String
+
+    private var item: SidebarItem? {
+        app.shortcut(forSession: window.session, on: host).map { .window($0.id, index: window.index) }
+    }
+
+    private var presence: AppState.WindowPresence {
+        app.presence(ofWindow: window, on: host)
+    }
 
     @State private var isRenaming = false
     @State private var newName = ""
@@ -337,11 +349,24 @@ private struct WindowRow: View {
                 // Un `Button`, pas un `.onTapGesture` : dans la barre latérale,
                 // qui défile, un geste de tap attend de perdre l'arbitrage
                 // contre le défilement avant de se déclencher.
-                Button { app.select(window, on: host) } label: { row }
+                Button {
+                    if NSEvent.modifierFlags.contains(.option), let item {
+                        app.showBeside(item)
+                    } else {
+                        app.select(window, on: host)
+                    }
+                } label: { row }
                     .buttonStyle(.plain)
             }
         }
+        .onDrag {
+            app.draggedItem = item
+            return NSItemProvider(object: window.name as NSString)
+        }
         .contextMenu {
+            if let item {
+                Button("Ouvrir à côté") { app.showBeside(item) }
+            }
             Button("Renommer…") {
                 newName = window.name
                 isRenaming = true
@@ -379,7 +404,7 @@ private struct WindowRow: View {
                     .onSubmit { commitRename() }
             } else {
                 Text(window.name)
-                    .foregroundStyle(window.isActive ? Color.latchText : Color.latchTextDim)
+                    .foregroundStyle(presence == .hidden ? Color.latchTextDim : Color.latchText)
                     .lineLimit(1)
                     .layoutPriority(1)
                 // Le témoin le plus précis : celui du Claude de cette fenêtre.
@@ -388,6 +413,7 @@ private struct WindowRow: View {
                 }
                 Spacer(minLength: 4)
                 if isHovering {
+                    if let item { OpenBesideButton(item: item) }
                     Button(action: requestClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 8, weight: .medium))
@@ -413,7 +439,8 @@ private struct WindowRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(window.isActive ? Color.latchSurface : .clear)
+                .fill(presence == .focused ? Color.latchSurfaceHigh
+                      : presence == .onScreen ? Color.latchSurface : .clear)
         )
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }

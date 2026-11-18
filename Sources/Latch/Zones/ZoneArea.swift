@@ -228,15 +228,22 @@ private struct SessionLabel: View {
             .foregroundStyle(isFocused ? Color.latchText : Color.latchTextDim)
             .lineLimit(1)
             .layoutPriority(1)
+        // Deux zones peuvent montrer la même session : c'est la fenêtre qui
+        // les distingue.
+        if let window = app.activeWindow(of: session) {
+            Text("\(window.index) \(window.name)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(isFocused ? Color.latchTextDim : Color.latchTextFaint)
+                .lineLimit(1)
+        }
         Text(session.host.isEmpty ? localized("ce Mac") : session.host)
             .foregroundStyle(Color.latchTextFaint)
             .lineLimit(1)
     }
 }
 
-/// Les actions d'une zone, toujours visibles : verrouiller, agrandir, fermer.
-/// Le découpage, lui, se choisit dans la barre du haut. L'infobulle donne le
-/// raccourci.
+/// Les actions d'une zone, toujours visibles : verrouiller, couper à droite,
+/// couper en dessous, agrandir, fermer. L'infobulle donne le raccourci.
 struct ZoneActions: View {
     @EnvironmentObject private var app: AppState
     let zone: Zone
@@ -254,6 +261,14 @@ struct ZoneActions: View {
                            ? localized("Déverrouiller la zone") + " — ⌥⌘L"
                            : localized("Verrouiller la zone : les clics de la barre latérale iront ailleurs") + " — ⌥⌘L",
                        highlighted: zone.isLocked) { app.toggleLock(zone.id) }
+            }
+            action("rectangle.split.2x1", label: "À droite",
+                   help: localized("Couper à droite") + " — ⌘D") {
+                app.splitZone(zone.id, axis: .horizontal)
+            }
+            action("rectangle.split.1x2", label: "En dessous",
+                   help: localized("Couper en dessous") + " — ⇧⌘D") {
+                app.splitZone(zone.id, axis: .vertical)
             }
             if !app.layout.isSingle {
                 action(isZoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
@@ -322,7 +337,8 @@ private struct EmptyZone: View {
 
     private var candidates: [Candidate] {
         let open = app.backgroundTabs.map { tab in
-            Candidate(id: "tab-\(tab.id)", item: .tab(tab.id), name: tab.title,
+            Candidate(id: "tab-\(tab.id)", item: .tab(tab.id),
+                      name: app.activeWindow(of: tab).map { "\(tab.title) · \($0.name)" } ?? tab.title,
                       host: tab.host, isOpen: true)
         }
         let closed = app.store.shortcuts

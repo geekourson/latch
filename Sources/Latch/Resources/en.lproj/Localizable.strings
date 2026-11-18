@@ -263,6 +263,8 @@
 "Fermer la zone" = "Close Zone";
 "Couper à droite" = "Split Right";
 "Couper en dessous" = "Split Down";
+"À droite" = "Right";
+"En dessous" = "Down";
 "Agrandir ou revenir" = "Enlarge or Restore";
 "Verrouiller ou déverrouiller" = "Lock or Unlock";
 "Zone à gauche" = "Zone to the Left";

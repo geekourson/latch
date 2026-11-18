@@ -184,6 +184,9 @@ enum CommandBuilder {
         windows: [TmuxWindow],
         toolPaths: [String: String] = [:]
     ) -> String {
+        if let view = connection.view {
+            return viewInvocation(connection, view: view, toolPaths: toolPaths)
+        }
         var parts = [resolve("tmux", in: toolPaths)]
         if connection.controlMode { parts.append("-CC") }
         parts += ["new", "-A", "-s", ShellQuoting.quoted(connection.tmuxSession)]
@@ -195,6 +198,29 @@ enum CommandBuilder {
 
         if let command = sessionCommand(connection, windows: windows, toolPaths: toolPaths) {
             parts.append(ShellQuoting.singleQuoted(command))
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// `tmux new -A -s <vue> -t <session> ';' set-option … ';' select-window …`
+    ///
+    /// La vue rejoint le groupe de la session : rien n'est créé, ni fenêtre ni
+    /// commande. `destroy-unattached` la fait disparaître dès que son
+    /// terminal se détache — rien ne s'accumule sur l'hôte. Les options de
+    /// session ne se partagent pas dans un groupe : la souris est rallumée
+    /// ici. Le `;` est cité pour traverser le shell, pas pour tmux.
+    static func viewInvocation(
+        _ connection: Connection, view: TmuxView, toolPaths: [String: String] = [:]
+    ) -> String {
+        let name = ShellQuoting.quoted(view.name)
+        var parts = [
+            resolve("tmux", in: toolPaths), "new", "-A", "-s", name,
+            "-t", ShellQuoting.quoted(connection.tmuxSession),
+            "';'", "set-option", "-t", name, "destroy-unattached", "on",
+            "';'", "set-option", "-t", name, "mouse", "on",
+        ]
+        if let window = view.window {
+            parts += ["';'", "select-window", "-t", ShellQuoting.quoted("\(view.name):\(window)")]
         }
         return parts.joined(separator: " ")
     }

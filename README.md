@@ -36,10 +36,14 @@ Tout se fait à la souris, et chaque action est visible :
   côte, deux superposés, quatre, six (3 × 2) et huit (4 × 2). Une disposition
   se remplit avec ce qui tourne déjà, la zone active en tête.
 - **Une barre de titre par zone** : la session, son hôte, et ses actions —
-  verrouiller, agrandir, fermer.
+  verrouiller, couper à droite, couper en dessous, agrandir, fermer.
 - **Glisser une session** depuis la barre latérale : au centre d'une zone, elle
   la remplace ; sur un bord, la zone se coupe de ce côté. Un cadre en
   pointillés dit ce qui va se passer avant qu'on lâche.
+- **Plusieurs fenêtres d'une même session** côte à côte : glisse une fenêtre
+  tmux de la barre latérale sur une zone, ou ⌥-clique-la. Latch ouvre une vue
+  de la session — mêmes fenêtres, mêmes programmes — qui montre sa propre
+  fenêtre, et qui disparaît de l'hôte avec son terminal.
 - **Verrouiller une zone** garde son terminal à l'écran : un clic dans la barre
   latérale va remplir une autre zone.
 - **Une zone vide** propose ce qu'elle peut afficher, les terminaux déjà ouverts

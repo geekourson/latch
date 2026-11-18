@@ -80,6 +80,32 @@ struct Connection: Codable, Equatable {
     var keepShellOnExit: Bool = true
     /// `tmux -CC`. Incompatible mosh, refusé au niveau du modèle.
     var controlMode: Bool = false
+    /// Une vue de plus sur la session, le temps d'un terminal : jamais
+    /// persistée, absente des clés de codage.
+    var view: TmuxView?
+}
+
+/// Une session groupée avec celle du raccourci : les mêmes fenêtres, les mêmes
+/// programmes, mais sa propre fenêtre courante. C'est ce qui permet d'afficher
+/// deux fenêtres d'une même session dans deux zones — deux clients attachés à
+/// la même session montreraient toujours la même.
+struct TmuxView: Equatable {
+    /// « api~2 » : le nom de la session groupée sur l'hôte.
+    var name: String
+    /// La fenêtre à afficher en arrivant.
+    var window: Int?
+
+    /// Les vues se reconnaissent à leur nom : la session du raccourci, un
+    /// tilde, un numéro. C'est ce qui les tient hors des sessions orphelines.
+    static func name(for session: String, number: Int) -> String {
+        "\(session)~\(number)"
+    }
+
+    static func isView(_ name: String, of session: String) -> Bool {
+        guard name.hasPrefix(session + "~") else { return false }
+        let number = name.dropFirst(session.count + 1)
+        return !number.isEmpty && number.allSatisfy(\.isNumber)
+    }
 }
 
 enum Transport: String, Codable, CaseIterable, Identifiable {

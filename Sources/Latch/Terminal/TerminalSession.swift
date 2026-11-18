@@ -34,6 +34,9 @@ final class TerminalSession: ObservableObject, Identifiable {
     let shortcutID: Shortcut.ID?
     /// L'alias de l'hôte, pour la pastille d'état de la barre latérale.
     let host: String
+    /// La session tmux à laquelle ce terminal est attaché : celle du
+    /// raccourci, ou une vue groupée avec elle (`TmuxView`). `nil` sans tmux.
+    let tmuxSession: String?
     /// Ce que la sonde a imposé de perdre en route (§6).
     let degradation: Degradation
     /// Variables ajoutées à l'environnement du process. C'est par là que passe
@@ -81,6 +84,7 @@ final class TerminalSession: ObservableObject, Identifiable {
         command: String,
         shortcutID: Shortcut.ID? = nil,
         host: String = "",
+        tmuxSession: String? = nil,
         degradation: Degradation = .none,
         environment: [String: String] = [:],
         notice: String? = nil
@@ -89,6 +93,7 @@ final class TerminalSession: ObservableObject, Identifiable {
         self.command = command
         self.shortcutID = shortcutID
         self.host = host
+        self.tmuxSession = tmuxSession
         self.degradation = degradation
         self.environment = environment
         self.notice = notice

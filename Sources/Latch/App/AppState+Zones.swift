@@ -14,6 +14,8 @@ import Foundation
 enum SidebarItem: Equatable {
     case shortcut(Shortcut.ID)
     case tab(TerminalSession.ID)
+    /// Une fenêtre tmux de la session d'un raccourci.
+    case window(Shortcut.ID, index: Int)
 }
 
 /// Le côté d'une zone où tombe un dépôt.
@@ -245,10 +247,18 @@ extension AppState {
     // MARK: - Barre latérale
 
     /// Le terminal qu'une ligne désigne, s'il est ouvert.
+    ///
+    /// Pour une fenêtre : le terminal qui la montre à l'écran — c'est lui qui
+    /// se déplace quand on la glisse ailleurs.
     func session(for item: SidebarItem) -> TerminalSession? {
         switch item {
         case .tab(let id): return tabs.first { $0.id == id }
-        case .shortcut(let id): return tabs.first { $0.shortcutID == id }
+        case .shortcut(let id): return store.shortcut(id: id).flatMap(tab(for:))
+        case .window(let id, let index):
+            guard let shortcut = store.shortcut(id: id) else { return nil }
+            return tabs(of: shortcut).first { tab in
+                activeWindow(of: tab)?.index == index && layout.zone(showing: tab.id) != nil
+            }
         }
     }
 
@@ -256,12 +266,23 @@ extension AppState {
         switch item {
         case .tab(let id): return tabs.first { $0.id == id }?.title ?? ""
         case .shortcut(let id): return store.shortcut(id: id)?.displayName ?? ""
+        case .window(let id, let index):
+            guard let shortcut = store.shortcut(id: id) else { return "" }
+            let session = shortcut.connection.tmuxSession
+            let window = liveWindows(on: shortcut.connection.host, session: session)
+                .first { $0.index == index }
+            return "\(shortcut.displayName) · \(index) \(window?.name ?? "")"
+                .trimmingCharacters(in: .whitespaces)
         }
     }
 
     /// Affiche une ligne de la barre latérale, dans une zone donnée ou là où
     /// irait un clic. Un raccourci fermé s'ouvre au passage.
     func show(_ item: SidebarItem, in zoneID: Zone.ID? = nil) {
+        if case .window(let id, let index) = item {
+            guard let shortcut = store.shortcut(id: id) else { return }
+            return show(window: index, of: shortcut, in: zoneID)
+        }
         if let session = session(for: item) { return show(session.id, in: zoneID) }
         guard case .shortcut(let id) = item, let shortcut = store.shortcut(id: id) else { return }
         Task { await open(shortcut, into: zoneID) }

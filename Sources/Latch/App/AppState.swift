@@ -165,10 +165,16 @@ final class AppState: ObservableObject {
     /// seul moyen de savoir s'il faut dégrader la commande. Elle ne bloque rien
     /// d'autre — un seul aller-retour, et un échec se traite comme « serveur
     /// complet » plutôt que d'empêcher la connexion.
-    func open(_ shortcut: Shortcut, into zoneID: Zone.ID? = nil) async {
-        if let existing = tabs.first(where: { $0.shortcutID == shortcut.id }) {
+    ///
+    /// Avec `view`, c'est toujours un terminal de plus : une vue groupée avec
+    /// la session (`TmuxView`), pour en montrer une autre fenêtre.
+    @discardableResult
+    func open(
+        _ shortcut: Shortcut, into zoneID: Zone.ID? = nil, view: TmuxView? = nil
+    ) async -> TerminalSession? {
+        if view == nil, let existing = tab(for: shortcut) {
             show(existing.id, in: zoneID)
-            return
+            return existing
         }
 
         if shortcut.connection.transport.isRemote,
@@ -183,12 +189,20 @@ final class AppState: ObservableObject {
             : LocalTools.probe()
         let degradation = ServerCapabilities.degradation(for: shortcut, probe: probe)
 
+        // Une vue ne crée rien : ni fenêtre déclarée, ni commande initiale.
+        var launched = shortcut
+        if let view {
+            launched.connection.view = view
+            launched.windows = []
+        }
+        let hasTmux = degradation != .tmuxMissing && !shortcut.isCustom
+
         // Le driver du §3.2 construit la commande et, pour mosh, fait sa
         // poignée de main avant de la rendre.
         let driver = ConnectionDrivers.driver(for: shortcut, degradation: degradation)
         do {
             let plan = try await driver.plan(
-                for: shortcut,
+                for: launched,
                 degradation: degradation,
                 toolPaths: probe?.offPathTools ?? [:]
             )
@@ -197,18 +211,27 @@ final class AppState: ObservableObject {
                 command: plan.command,
                 shortcutID: shortcut.id,
                 host: shortcut.connection.host,
+                tmuxSession: hasTmux ? (view?.name ?? shortcut.connection.tmuxSession) : nil,
                 degradation: degradation,
                 environment: plan.environment,
                 notice: plan.notice
             )
             attachStoredPassword(to: session)
-            tabs.append(session)
-            show(session.id, in: zoneID)
+            add(session, in: zoneID)
             followHooks(on: shortcut.connection.host)
-            prepareSession(of: shortcut)
+            // Une vue a déjà sa souris, posée par sa propre commande.
+            if view == nil { prepareSession(of: shortcut) }
+            return session
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
+    }
+
+    /// Range un terminal parmi les ouverts et l'affiche.
+    func add(_ session: TerminalSession, in zoneID: Zone.ID? = nil) {
+        tabs.append(session)
+        show(session.id, in: zoneID)
     }
 
     /// SPEC §11 : un mot de passe n'est utilisé que s'il a été rangé dans le
@@ -435,10 +458,8 @@ final class AppState: ObservableObject {
     /// La session tmux de l'onglet au premier plan, pour les raccourcis
     /// clavier qui agissent sur ses fenêtres.
     private var selectedSession: (host: String, session: String)? {
-        guard let tab = selectedTab, let id = tab.shortcutID,
-              let shortcut = store.shortcut(id: id)
-        else { return nil }
-        return (tab.host, shortcut.connection.tmuxSession)
+        guard let tab = selectedTab, let session = tab.tmuxSession else { return nil }
+        return (tab.host, session)
     }
 
     /// ⌘T : une fenêtre de plus dans la session au premier plan.
@@ -499,6 +520,10 @@ final class AppState: ObservableObject {
     /// fallait d'abord cliquer la session, ce que rien n'indiquait. La ligne
     /// ouvre donc la session au passage, comme on s'y attend.
     func select(_ window: LiveWindow, on host: String) {
+        if let shortcut = shortcut(forSession: window.session, on: host), supportsViews(shortcut) {
+            show(window: window.index, of: shortcut, in: nil)
+            return
+        }
         let isAttached = tab(forSession: window.session, on: host) != nil
         guard isAttached else {
             guard let shortcut = shortcut(forSession: window.session, on: host) else {
@@ -525,13 +550,10 @@ final class AppState: ObservableObject {
         selectedTabID = tab.id
     }
 
-    /// L'onglet attaché à une session tmux, s'il y en a un. Un onglet ne
-    /// connaît que son raccourci : c'est lui qui porte le nom de la session.
-    private func tab(forSession session: String, on host: String) -> TerminalSession? {
-        tabs.first { tab in
-            guard tab.host == host, let id = tab.shortcutID else { return false }
-            return store.shortcut(id: id)?.connection.tmuxSession == session
-        }
+    /// Le terminal attaché à une session tmux — celle d'un raccourci ou une
+    /// de ses vues —, s'il y en a un.
+    func tab(forSession session: String, on host: String) -> TerminalSession? {
+        tabs.first { $0.host == host && $0.tmuxSession == session }
     }
 
     /// Le dépôt du panneau actif de la session d'un onglet (§9.1).
@@ -539,7 +561,7 @@ final class AppState: ObservableObject {
         guard let shortcutID = session.shortcutID,
               let shortcut = store.shortcut(id: shortcutID)
         else { return nil }
-        return liveRepositories[session.host]?[shortcut.connection.tmuxSession]
+        return liveRepositories[session.host]?[session.tmuxSession ?? shortcut.connection.tmuxSession]
     }
 
     func latency(on host: String) -> String? { latencies[host] }
@@ -560,13 +582,36 @@ final class AppState: ObservableObject {
                 .filter { host.isEmpty || $0.connection.host == host }
                 .map(\.connection.tmuxSession)
         )
-        return (liveSessions[host] ?? []).filter { !known.contains($0.name) }
+        // Les vues de Latch ne sont pas des oubliées : elles disparaissent
+        // d'elles-mêmes avec leur terminal.
+        return (liveSessions[host] ?? []).filter { session in
+            !known.contains(session.name)
+                && !known.contains { TmuxView.isView(session.name, of: $0) }
+        }
     }
 
     /// Injecte des sessions sans passer par un serveur : réservé aux tests, qui
     /// ne peuvent pas ouvrir de connexion ssh.
     func setLiveSessionsForTesting(_ sessions: [LiveSession], on host: String) {
         liveSessions[host] = sessions
+    }
+
+    func setLiveWindowsForTesting(_ windows: [String: [LiveWindow]], on host: String) {
+        liveWindows[host] = windows
+    }
+
+    /// Bascule un terminal sur une fenêtre : sa session tmux — la sienne,
+    /// vue comprise — en change, et lui seul. Appliqué aussi ici, sans
+    /// attendre le tour de l'inspecteur, pour que la barre latérale suive.
+    func selectWindow(_ index: Int, in tab: TerminalSession) {
+        guard let session = tab.tmuxSession else { return }
+        let known = liveWindows[tab.host]?[session] ?? []
+        let window = known.first { $0.index == index }
+            ?? LiveWindow(session: session, index: index, name: "", isActive: true)
+        if !known.isEmpty {
+            liveWindows[tab.host]?[session] = TmuxOptimism.selecting(index: index, in: known)
+        }
+        inspectors[tab.host]?.select(window)
     }
 
     /// Retire un serveur de la barre latérale. Ne touche **rien** sur l'hôte :
@@ -668,8 +713,7 @@ final class AppState: ObservableObject {
             command: "ssh -t \(ShellQuoting.quoted(alias))",
             host: alias
         )
-        tabs.append(session)
-        show(session.id)
+        add(session)
         return session
     }
 
@@ -678,14 +722,20 @@ final class AppState: ObservableObject {
     @discardableResult
     func openLocalShell(named name: String) -> TerminalSession {
         let session = TerminalSession(name: name, command: "exec $SHELL -l")
-        tabs.append(session)
-        show(session.id)
+        add(session)
         return session
     }
 
-    /// Le terminal ouvert sur ce raccourci, s'il y en a un.
+    /// Le terminal ouvert sur ce raccourci, s'il y en a un : celui de la
+    /// session elle-même plutôt qu'une de ses vues.
     func tab(for shortcut: Shortcut) -> TerminalSession? {
-        tabs.first { $0.shortcutID == shortcut.id }
+        let family = tabs(of: shortcut)
+        return family.first { $0.tmuxSession == shortcut.connection.tmuxSession } ?? family.first
+    }
+
+    /// Tous les terminaux ouverts sur ce raccourci : la session, et ses vues.
+    func tabs(of shortcut: Shortcut) -> [TerminalSession] {
+        tabs.filter { $0.shortcutID == shortcut.id }
     }
 
     /// Les terminaux que Latch ouvre lui-même, sans raccourci : l'installeur

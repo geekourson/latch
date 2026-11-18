@@ -424,7 +424,13 @@ final class TmuxInspector: ObservableObject {
         }
 
         if trimmed.hasPrefix(Self.panePrefix) {
-            if let (pane, window) = Self.parse(paneLine: trimmed) { pendingPanes[pane] = window }
+            // Un panneau appartient à toutes les sessions d'un groupe (les vues
+            // de `TmuxView`). La session d'origine vient en premier — son nom
+            // est un préfixe de celui de ses vues : c'est elle qu'on garde,
+            // c'est sous son nom que la barre latérale range les fenêtres.
+            if let (pane, window) = Self.parse(paneLine: trimmed), pendingPanes[pane] == nil {
+                pendingPanes[pane] = window
+            }
             return
         }
 

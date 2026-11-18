@@ -410,12 +410,11 @@ NSWorkspace.shared.notificationCenter.addObserver(
     superposés, quatre, six (3 × 2) et huit (4 × 2). Grisées si chaque
     colonne aurait moins de 220 points.
   - Chaque zone a sa barre de titre (session, hôte) et ses actions :
-    verrouiller (⌥⌘L), agrandir (⇧⌘↩), fermer (⌘W). Le découpage se choisit
-    dans les dispositions ; couper à droite (⌘D) et en dessous (⇧⌘D) restent
-    au menu Zones. Seule à l'écran, elle n'a ni cadre ni barre : ses actions
-    sont dans la bande du haut. Les séparateurs sont des vues AppKit : une
-    vue SwiftUI transparente compterait pour du fond, et glisser déplacerait
-    la fenêtre.
+    verrouiller (⌥⌘L), couper à droite (⌘D), en dessous (⇧⌘D), agrandir
+    (⇧⌘↩), fermer (⌘W). Seule à l'écran, elle n'a ni cadre ni barre : ses
+    actions sont dans la bande du haut. Les séparateurs sont des vues
+    AppKit : une vue SwiftUI transparente compterait pour du fond, et glisser
+    déplacerait la fenêtre.
   - Un clic dans la barre latérale affiche la session dans la zone active ;
     verrouillée, dans la dernière zone non verrouillée ; tout verrouillé, la
     plus grande zone se coupe. « Ouvrir à côté » (bouton au survol, ⌥-clic)
@@ -426,6 +425,26 @@ NSWorkspace.shared.notificationCenter.addObserver(
     déplacé. Fermer une zone le laisse connecté hors de l'écran ;
     « Déconnecter » le ferme et vide sa zone.
   - Une zone vide liste les terminaux ouverts, puis les raccourcis.
+  - Plusieurs fenêtres d'une même session, chacune dans sa zone. La fenêtre
+    courante appartient à la session tmux, pas au client : deux terminaux
+    attachés à la même session montrent toujours la même. Une zone qui veut
+    une autre fenêtre reçoit donc une **vue** : une session groupée,
+    `tmux new -A -s <session>~2 -t <session>`, qui partage fenêtres et
+    programmes mais garde sa fenêtre courante. `destroy-unattached` l'efface
+    dès que son terminal se détache ; la souris (option de session, non
+    partagée dans un groupe) y est rallumée. Les vues ne figurent ni parmi
+    les sessions orphelines ni dans la barre latérale.
+    - Clic sur une fenêtre : sa zone si elle est à l'écran ; sinon la zone
+      de la session la plus récemment utilisée et non verrouillée bascule
+      dessus ; sinon un terminal de la session hors de l'écran ; sinon une
+      vue. Une zone verrouillée garde sa fenêtre.
+    - Glisser une fenêtre, ou « Ouvrir à côté » (bouton au survol, ⌥-clic) :
+      même règle de dépôt qu'une session ; la zone d'arrivée bascule si elle
+      montre déjà la session, sinon un terminal libre de la session ou une
+      vue s'y affiche.
+    - La barre de titre d'une zone donne la fenêtre affichée ; dans la barre
+      latérale, une fenêtre à l'écran est en clair, celle de la zone active
+      surlignée.
   - Pendant qu'on glisse un séparateur, l'hôte ne reçoit que la taille
     finale ; double-clic : parts égales.
 - Zone terminal : padding 18–22 px, interligne 1,25 (multiplicateur de la
