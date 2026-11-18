@@ -242,8 +242,9 @@ private struct SessionLabel: View {
     }
 }
 
-/// Les actions d'une zone, toujours visibles : verrouiller, couper à droite,
-/// couper en dessous, agrandir, fermer. L'infobulle donne le raccourci.
+/// Les actions d'une zone, toujours visibles : verrouiller, agrandir, fermer.
+/// Le découpage, lui, se choisit dans la barre du haut. L'infobulle donne le
+/// raccourci.
 struct ZoneActions: View {
     @EnvironmentObject private var app: AppState
     let zone: Zone
@@ -261,14 +262,6 @@ struct ZoneActions: View {
                            ? localized("Déverrouiller la zone") + " — ⌥⌘L"
                            : localized("Verrouiller la zone : les clics de la barre latérale iront ailleurs") + " — ⌥⌘L",
                        highlighted: zone.isLocked) { app.toggleLock(zone.id) }
-            }
-            action("rectangle.split.2x1", label: "À droite",
-                   help: localized("Couper à droite") + " — ⌘D") {
-                app.splitZone(zone.id, axis: .horizontal)
-            }
-            action("rectangle.split.1x2", label: "En dessous",
-                   help: localized("Couper en dessous") + " — ⇧⌘D") {
-                app.splitZone(zone.id, axis: .vertical)
             }
             if !app.layout.isSingle {
                 action(isZoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
@@ -415,11 +408,17 @@ private struct DividerHandle: View {
 
     @State private var isHovering = false
     @State private var isDragging = false
+    /// Le curseur posé par ce séparateur, à retirer une fois et une seule.
+    @State private var pushedCursor = false
 
     private var isVertical: Bool { divider.axis == .horizontal }
 
     var body: some View {
         let frame = divider.frame
+        // Tout ce qui écoute la souris s'accroche AVANT `.position` : après,
+        // le survol, le glisser et l'infobulle couvraient toute la place des
+        // zones — curseur bloqué, clics changés en redimensionnement, molette
+        // perdue pour les terminaux.
         ZStack {
             Color.clear
             Rectangle()
@@ -428,17 +427,13 @@ private struct DividerHandle: View {
         }
         .frame(width: frame.width, height: frame.height)
         .contentShape(Rectangle())
-        .position(x: frame.midX, y: frame.midY)
         .onHover { hovering in
             isHovering = hovering
-            if hovering {
-                (isVertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
-            } else {
-                NSCursor.pop()
-            }
+            setCursor(hovering)
         }
+        .onDisappear { setCursor(false) }
         .gesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .named("zones"))
+            DragGesture(minimumDistance: 1, coordinateSpace: .named("zones"))
                 .onChanged { value in
                     isDragging = true
                     let container = divider.container
@@ -454,6 +449,17 @@ private struct DividerHandle: View {
             app.setRatio(0.5, ofSplit: divider.splitID)
         })
         .help("Glisser pour redimensionner · double-clic : parts égales")
+        .position(x: frame.midX, y: frame.midY)
+    }
+
+    private func setCursor(_ on: Bool) {
+        guard on != pushedCursor else { return }
+        pushedCursor = on
+        if on {
+            (isVertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).push()
+        } else {
+            NSCursor.pop()
+        }
     }
 }
 
