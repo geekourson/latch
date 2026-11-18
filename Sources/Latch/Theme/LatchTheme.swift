@@ -91,6 +91,7 @@ extension SwiftUI.Color {
     static let latchSurface = SwiftUI.Color(LatchTheme.surface)
     static let latchSurfaceHigh = SwiftUI.Color(LatchTheme.surfaceHigh)
     static let latchBorder = SwiftUI.Color(LatchTheme.border)
+    static let latchBorderStrong = SwiftUI.Color(LatchTheme.borderStrong)
     static let latchText = SwiftUI.Color(LatchTheme.text)
     static let latchTextDim = SwiftUI.Color(LatchTheme.textDim)
     static let latchTextFaint = SwiftUI.Color(LatchTheme.textFaint)

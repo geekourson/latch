@@ -15,8 +15,39 @@ final class AppState: ObservableObject {
 
     let store: SessionStore
 
+    /// Les terminaux ouverts, à l'écran ou non. Ceux qu'aucune zone n'affiche
+    /// restent connectés en arrière-plan.
     @Published private(set) var tabs: [TerminalSession] = []
-    @Published var selectedTabID: TerminalSession.ID?
+
+    /// Les zones de l'écran (voir `ZoneLayout`) et celle qui a la main. Ne
+    /// changent que par `AppState+Zones`, qui vit dans un autre fichier : d'où
+    /// l'absence de `private(set)`.
+    @Published var layout = ZoneLayout()
+    @Published var focusedZoneID: Zone.ID
+    /// La zone agrandie à toute la place, les autres attendant derrière.
+    @Published var zoomedZoneID: Zone.ID?
+    /// La zone qu'un clic dans la barre latérale remplirait, montrée au survol.
+    @Published var previewedTarget: ZonePreview?
+    /// Ce que montrerait un dépôt en cours de glisser.
+    @Published var dropHint: ZoneDropHint?
+    /// Ce qu'on glisse depuis la barre latérale, le temps du geste.
+    var draggedItem: SidebarItem?
+
+    /// Les zones activées successivement : une zone verrouillée renvoie à la
+    /// dernière qui ne l'est pas.
+    var zoneHistory: [Zone.ID] = []
+    /// Ce que mesure la vue des zones : la taille de la place, et celle de
+    /// chaque zone. Elle sert aux tailles minimales et à trouver la plus grande.
+    var zoneAreaSize: CGSize = .zero
+    var zoneFrames: [Zone.ID: CGRect] = [:]
+
+    /// Le terminal de la zone active. L'affecter affiche ce terminal : dans
+    /// sa zone s'il est déjà à l'écran, sinon là où irait un clic de la barre
+    /// latérale (`show`).
+    var selectedTabID: TerminalSession.ID? {
+        get { layout.zone(focusedZoneID)?.sessionID }
+        set { if let newValue { show(newValue) } }
+    }
 
     /// Le raccourci en cours d'édition dans l'écran du builder (§9.2).
     @Published var editedShortcut: Shortcut?
@@ -73,6 +104,9 @@ final class AppState: ObservableObject {
     init(store: SessionStore? = nil) {
         let store = store ?? SessionStore()
         self.store = store
+        let layout = ZoneLayout()
+        self.focusedZoneID = layout.zones[0].id
+        self.layout = layout
         // Le store est une source de vérité imbriquée : sans ça, SwiftUI ne
         // redessine pas la barre latérale quand un raccourci change.
         store.objectWillChange
@@ -133,9 +167,9 @@ final class AppState: ObservableObject {
     /// seul moyen de savoir s'il faut dégrader la commande. Elle ne bloque rien
     /// d'autre — un seul aller-retour, et un échec se traite comme « serveur
     /// complet » plutôt que d'empêcher la connexion.
-    func open(_ shortcut: Shortcut) async {
+    func open(_ shortcut: Shortcut, into zoneID: Zone.ID? = nil) async {
         if let existing = tabs.first(where: { $0.shortcutID == shortcut.id }) {
-            selectedTabID = existing.id
+            show(existing.id, in: zoneID)
             return
         }
 
@@ -171,7 +205,7 @@ final class AppState: ObservableObject {
             )
             attachStoredPassword(to: session)
             tabs.append(session)
-            selectedTabID = session.id
+            show(session.id, in: zoneID)
             followHooks(on: shortcut.connection.host)
             prepareSession(of: shortcut)
         } catch {
@@ -437,7 +471,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func showNotice(_ notice: String) {
+    func showNotice(_ notice: String) {
         transientNotice = notice
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
@@ -637,7 +671,7 @@ final class AppState: ObservableObject {
             host: alias
         )
         tabs.append(session)
-        selectedTabID = session.id
+        show(session.id)
         return session
     }
 
@@ -647,7 +681,7 @@ final class AppState: ObservableObject {
     func openLocalShell(named name: String) -> TerminalSession {
         let session = TerminalSession(name: name, command: "exec $SHELL -l")
         tabs.append(session)
-        selectedTabID = session.id
+        show(session.id)
         return session
     }
 
@@ -666,28 +700,20 @@ final class AppState: ObservableObject {
 
     // MARK: - Fermeture
 
-    /// ⌘W : ferme le terminal au premier plan. La session tmux, elle, continue
-    /// sur l'hôte — c'est une déconnexion, pas une fermeture de session.
-    func closeSelectedTab() {
-        guard let id = selectedTabID else { return }
-        close(tabID: id)
-    }
-
+    /// Déconnecte un terminal. Sa zone reste, vide, et propose de quoi la
+    /// remplir : fermer un terminal ne doit pas réarranger l'écran.
     func close(tabID: TerminalSession.ID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         tabs[index].terminate()
         tabs.remove(at: index)
-
-        if selectedTabID == tabID {
-            selectedTabID = tabs.indices.contains(index) ? tabs[index].id : tabs.last?.id
-        }
+        layout.clear(sessionID: tabID)
         pruneHookStreams()
     }
 
     func closeAll() {
         tabs.forEach { $0.terminate() }
         tabs.removeAll()
-        selectedTabID = nil
+        resetLayout()
         pruneHookStreams()
     }
 
@@ -843,7 +869,7 @@ extension AppState: MCPHost {
             host: alias
         )
         tabs.append(session)
-        selectedTabID = session.id
+        show(session.id)
         return "Onglet « \(title) » ouvert sur \(alias)."
     }
 
@@ -862,7 +888,7 @@ extension AppState: MCPHost {
             host: alias
         )
         tabs.append(session)
-        selectedTabID = session.id
+        show(session.id)
         return "« \(path) » affiché depuis \(alias)."
     }
 }

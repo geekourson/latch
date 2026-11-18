@@ -17,9 +17,9 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 // La barre de titre est transparente et le contenu passe
-                // dessous : sans cette réserve, les onglets disparaissent
-                // derrière les feux de circulation.
-                Color.latchBackground.frame(height: 28)
+                // dessous : cette bande la remplace, et porte les dispositions.
+                ZoneTopBand()
+                    .background(Color.latchBackground)
 
                 if app.currentDegradation.isDegraded {
                     DegradationBanner(
@@ -64,66 +64,27 @@ struct ContentView: View {
         )
     }
 
-    /// Tous les onglets restent montés : basculer d'onglet ne doit pas tuer un
-    /// pseudo-terminal ni relancer une connexion. Ils partagent le même cadre,
-    /// donc la géométrie annoncée à tmux reste juste.
+    /// Les zones, chacune avec son terminal. Tous les terminaux restent
+    /// montés, à l'écran ou non : en masquer un ne doit pas couper sa
+    /// connexion (voir `ZoneArea`).
     private var terminalArea: some View {
-        ZStack {
-            Color(app.store.activeTheme.background.nsColor)
-
-            ForEach(app.tabs) { session in
-                let isSelected = session.id == app.selectedTabID
-                TerminalPane(session: session, style: app.store.terminalStyle, isVisible: isSelected)
-                    .opacity(isSelected ? 1 : 0)
-                    .allowsHitTesting(isSelected)
-                    .zIndex(isSelected ? 1 : 0)
+        ZoneArea()
+            .padding([.horizontal, .bottom], app.layout.isSingle ? 0 : 6)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.latchBackground)
+            .overlay(alignment: .bottomTrailing) {
+                if let notice = app.transientNotice {
+                    Text(notice)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.latchTextDim)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.latchSurfaceHigh))
+                        .padding(12)
+                        .transition(.opacity)
+                }
             }
-
-            if app.tabs.isEmpty {
-                EmptyState()
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .bottomTrailing) {
-            if let notice = app.transientNotice {
-                Text(notice)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.latchTextDim)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.latchBackground))
-                    .padding(12)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.16), value: app.transientNotice)
-    }
-}
-
-// MARK: - État vide
-
-private struct EmptyState: View {
-    @EnvironmentObject private var app: AppState
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text("Your sessions, still running.")
-                .font(.system(size: 13))
-                .foregroundStyle(Color.latchTextDim)
-
-            Text(app.store.shortcuts.isEmpty
-                ? "Crée une session pour t'accrocher à un serveur."
-                : "Choisis une session dans la barre latérale.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color.latchTextFaint)
-
-            if app.store.shortcuts.isEmpty {
-                Button("Nouvelle session") { app.newShortcut() }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .padding(.top, 4)
-            }
-        }
+            .animation(.easeOut(duration: 0.16), value: app.transientNotice)
     }
 }
 

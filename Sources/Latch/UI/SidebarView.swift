@@ -7,6 +7,7 @@
 //  par serveur.
 //
 
+import AppKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -223,14 +224,26 @@ private struct ShortcutRow: View {
         app.selectedTab?.shortcutID == shortcut.id
     }
 
+    private var isOnScreen: Bool {
+        openTab.map { app.layout.zone(showing: $0.id) != nil } ?? false
+    }
+
+    private var item: SidebarItem { .shortcut(shortcut.id) }
+
     var body: some View {
         Button {
-            Task { await app.open(shortcut) }
+            app.preview(nil)
+            // ⌥-clic : à côté, comme le bouton qui apparaît au survol.
+            if NSEvent.modifierFlags.contains(.option) {
+                app.showBeside(item)
+            } else {
+                Task { await app.open(shortcut) }
+            }
         } label: {
             HStack(spacing: 6) {
                 Text(shortcut.displayName)
                     .font(.system(size: 11.5, design: .monospaced))
-                    .foregroundStyle(isSelected ? Color.latchText : Color.latchTextDim)
+                    .foregroundStyle(isSelected || isOnScreen ? Color.latchText : Color.latchTextDim)
 
                 // Le témoin du serveur dit qu'une session veut quelque chose ;
                 // celui-ci dit laquelle, quand ses fenêtres ne le disent pas
@@ -244,9 +257,10 @@ private struct ShortcutRow: View {
 
                 Spacer(minLength: 0)
 
-                // Le `+` n'apparaît qu'au survol : au repos, la barre reste
-                // calme.
+                // Les boutons n'apparaissent qu'au survol : au repos, la barre
+                // reste calme.
                 if isHovering {
+                    OpenBesideButton(item: item)
                     Button {
                         app.newWindow(in: shortcut)
                     } label: {
@@ -278,8 +292,17 @@ private struct ShortcutRow: View {
         .help(shortcut.displayName == shortcut.connection.tmuxSession
             ? shortcut.connection.host
             : shortcut.connection.tmuxSession)
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            app.preview(hovering ? item : nil)
+        }
+        .onDrag {
+            app.preview(nil)
+            app.draggedItem = item
+            return NSItemProvider(object: shortcut.displayName as NSString)
+        }
         .contextMenu {
+            Button("Ouvrir à côté") { app.showBeside(item) }
             Button("Nouvelle fenêtre") { app.newWindow(in: shortcut) }
             // Ferme le terminal, pas la session : tmux continue sur l'hôte.
             if let openTab {
@@ -488,7 +511,12 @@ private struct PanelRow: View {
 
     var body: some View {
         Button {
-            app.selectedTabID = session.id
+            app.preview(nil)
+            if NSEvent.modifierFlags.contains(.option) {
+                app.showBeside(.tab(session.id))
+            } else {
+                app.show(session.id)
+            }
         } label: {
             HStack(spacing: 6) {
                 Text(session.title)
@@ -497,6 +525,7 @@ private struct PanelRow: View {
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if isHovering {
+                    OpenBesideButton(item: .tab(session.id))
                     Button {
                         app.close(tabID: session.id)
                     } label: {
@@ -523,10 +552,40 @@ private struct PanelRow: View {
         }
         .buttonStyle(.plain)
         .help(session.host.isEmpty ? localized("ce Mac") : session.host)
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            app.preview(hovering ? .tab(session.id) : nil)
+        }
+        .onDrag {
+            app.preview(nil)
+            app.draggedItem = .tab(session.id)
+            return NSItemProvider(object: session.title as NSString)
+        }
         .contextMenu {
+            Button("Ouvrir à côté") { app.showBeside(.tab(session.id)) }
             Button("Fermer") { app.close(tabID: session.id) }
         }
+    }
+}
+
+/// « Ouvrir à côté » : la zone active se coupe pour accueillir la session.
+private struct OpenBesideButton: View {
+    @EnvironmentObject private var app: AppState
+    let item: SidebarItem
+
+    var body: some View {
+        Button {
+            app.preview(nil)
+            app.showBeside(item)
+        } label: {
+            Image(systemName: "rectangle.split.2x1")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Color.latchTextDim)
+                .frame(width: 16, height: 14)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(localized("Ouvrir à côté") + " — ⌥ clic")
     }
 }
 

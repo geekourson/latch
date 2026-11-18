@@ -28,20 +28,43 @@ struct LatchApp: App {
                         .disabled(!updater.canCheckForUpdates)
                 }
             }
-            // ⌘W ferme le terminal au premier plan, comme la croix d'un onglet
-            // le faisait. Ailleurs — les Réglages, ou une fenêtre principale
-            // sans terminal —, il ferme la fenêtre, comme partout sur macOS.
+            // ⌘W ferme la zone active, comme sa croix. Ailleurs — les
+            // Réglages —, il ferme la fenêtre, comme partout sur macOS.
             CommandGroup(replacing: .saveItem) {
-                Button(localized("Fermer")) {
+                Button(localized("Fermer la zone")) {
                     let window = NSApp.keyWindow
-                    if window?.identifier == WindowChrome.mainWindowIdentifier,
-                       app.selectedTab != nil {
-                        app.closeSelectedTab()
+                    if window?.identifier == WindowChrome.mainWindowIdentifier {
+                        app.closeFocusedZone()
                     } else {
                         window?.performClose(nil)
                     }
                 }
                 .keyboardShortcut("w")
+            }
+            CommandMenu(localized("Zones")) {
+                Button(localized("Couper à droite")) { app.splitFocusedZone(.horizontal) }
+                    .keyboardShortcut("d")
+                Button(localized("Couper en dessous")) { app.splitFocusedZone(.vertical) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button(localized("Agrandir ou revenir")) { app.toggleZoomOfFocusedZone() }
+                    .keyboardShortcut(.return, modifiers: [.command, .shift])
+                    .disabled(app.layout.isSingle)
+                Button(localized("Verrouiller ou déverrouiller")) { app.toggleLockOfFocusedZone() }
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                    .disabled(app.focusedZone?.sessionID == nil)
+                Divider()
+                Button(localized("Zone à gauche")) { app.focusNeighbour(.left) }
+                    .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                Button(localized("Zone à droite")) { app.focusNeighbour(.right) }
+                    .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                Button(localized("Zone au-dessus")) { app.focusNeighbour(.up) }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                Button(localized("Zone en dessous")) { app.focusNeighbour(.down) }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                Divider()
+                ForEach(LayoutPreset.allCases) { preset in
+                    Button(preset.title) { app.apply(preset) }
+                }
             }
             CommandGroup(after: .pasteboard) {
                 Button(localized("Copier l'historique de la fenêtre")) { app.copySelectedHistory() }

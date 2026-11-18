@@ -46,6 +46,10 @@ final class LocalizationTests: XCTestCase {
             "Retirer ce serveur…", "Renommer…", "Nouvelle fenêtre", "Ajouter au raccourci…",
             "Fermer la fenêtre", "Fenêtre suivante", "Fenêtre précédente",
             "Créer un raccourci ici", "Fermer la session…", "Panneaux", "Déconnecter",
+            // Zones
+            "Zones", "Fermer la zone", "Couper à droite", "Couper en dessous", "Ouvrir à côté",
+            "Zone vide", "Disposition", "Disposition libre", "Revenir à la disposition",
+            "Deux côte à côte", "Six (3 colonnes × 2 rangées)", "Huit (4 colonnes × 2 rangées)",
             // Terminal et barre d'état
             "aucune session", "Réessayer", "D'accord",
             // Builder
@@ -93,7 +97,8 @@ final class LocalizationTests: XCTestCase {
     /// `%@` produit un texte amputé à l'exécution.
     func testFormatsKeepTheirPlaceholders() throws {
         let english = try bundle("en")
-        for key in ["%@ absent", "%@ hors PATH", "1 fenêtre", "%d fenêtres", "il y a %d h", "%d lignes copiées"] {
+        for key in ["%@ absent", "%@ hors PATH", "1 fenêtre", "%d fenêtres", "il y a %d h", "%d lignes copiées",
+                    "Remplacer %@ par %@", "%d terminaux restent ouverts hors de l'écran."] {
             let value = try XCTUnwrap(translation(of: key, in: english), "clé absente : \(key)")
             for token in ["%@", "%d"] where key.contains(token) {
                 XCTAssertTrue(value.contains(token), "« \(value) » a perdu son \(token)")

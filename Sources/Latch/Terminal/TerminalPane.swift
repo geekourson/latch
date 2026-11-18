@@ -19,6 +19,10 @@ struct TerminalPane: NSViewRepresentable {
     /// doit pas se redessiner : une opacité nulle n'empêche pas AppKit de
     /// repeindre la vue à chaque octet reçu, une vue masquée si.
     var isVisible = true
+    /// Sa zone est la zone active : c'est lui qui reçoit le clavier.
+    var isFocused = true
+    /// Un clic dans le terminal rend sa zone active.
+    var onActivate: () -> Void = {}
 
     func makeCoordinator() -> Coordinator {
         Coordinator(session: session)
@@ -28,6 +32,7 @@ struct TerminalPane: NSViewRepresentable {
         let container = PaddedTerminalView(inset: style.padding)
         container.terminalView.terminalDelegate = context.coordinator
         container.isHidden = !isVisible
+        (container.terminalView as? SelectableTerminalView)?.onActivate = onActivate
         apply(style, to: container)
         context.coordinator.appliedStyle = style
         context.coordinator.attach(to: container.terminalView)
@@ -36,16 +41,22 @@ struct TerminalPane: NSViewRepresentable {
 
     func updateNSView(_ nsView: PaddedTerminalView, context: Context) {
         context.coordinator.session = session
+        (nsView.terminalView as? SelectableTerminalView)?.onActivate = onActivate
         if nsView.isHidden == isVisible {
             nsView.isHidden = !isVisible
             // Ce qui est arrivé pendant qu'il était masqué n'a pas été peint.
-            // Masquer l'ancien onglet lui retire le clavier : le nouveau le
-            // reprend, sinon la frappe n'irait nulle part.
-            if isVisible {
-                nsView.terminalView.needsDisplay = true
+            if isVisible { nsView.terminalView.needsDisplay = true }
+        }
+        // Le clavier suit la zone active, au moment où elle le devient — pas
+        // à chaque mise à jour, ce qui l'arracherait à un champ de texte en
+        // cours de saisie dans la barre latérale.
+        let wantsKeyboard = isVisible && isFocused
+        if wantsKeyboard, !context.coordinator.hadKeyboard {
+            DispatchQueue.main.async {
                 nsView.window?.makeFirstResponder(nsView.terminalView)
             }
         }
+        context.coordinator.hadKeyboard = wantsKeyboard
         guard context.coordinator.appliedStyle != style else { return }
         apply(style, to: nsView)
         context.coordinator.appliedStyle = style
@@ -88,6 +99,9 @@ struct TerminalPane: NSViewRepresentable {
         private var cancellable: AnyCancellable?
         private weak var terminal: TerminalView?
         private var didStart = false
+        /// Le terminal avait-il le clavier au dernier passage ?
+        var hadKeyboard = false
+        private var pendingResize: DispatchWorkItem?
 
         init(session: TerminalSession) {
             self.session = session
@@ -112,13 +126,23 @@ struct TerminalPane: NSViewRepresentable {
         // MARK: TerminalViewDelegate
 
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
-            session.resize(rows: newRows, cols: newCols)
             // Le premier redimensionnement est aussi le moment où l'on connaît
             // la vraie géométrie : c'est là qu'on lance le process.
             if !didStart, newRows > 0, newCols > 0 {
                 didStart = true
+                session.resize(rows: newRows, cols: newCols)
                 session.start(rows: UInt16(newRows), cols: UInt16(newCols))
+                return
             }
+            // Glisser un séparateur change la taille à chaque pixel. L'hôte
+            // n'en reçoit que la dernière : tmux redessinerait tout l'écran à
+            // chaque fois, et par mosh, ça saccaderait.
+            pendingResize?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.session.resize(rows: newRows, cols: newCols)
+            }
+            pendingResize = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
         }
 
         func setTerminalTitle(source: TerminalView, title: String) {
@@ -205,8 +229,11 @@ final class SelectableTerminalView: TerminalView {
     override var mouseDownCanMoveWindow: Bool { false }
 
     private var isPressed = false
+    /// Prévient que ce terminal vient d'être cliqué : sa zone devient active.
+    var onActivate: () -> Void = {}
 
     override func mouseDown(with event: NSEvent) {
+        onActivate()
         isPressed = true
         // Le geste entier va au même endroit : on décide à l'appui, une fois.
         allowMouseReporting = !selectionActive && !event.modifierFlags.contains(.option)

@@ -402,6 +402,30 @@ NSWorkspace.shared.notificationCenter.addObserver(
   d'un terminal ouvert est sur la ligne de sa session ; ⌘W et « Déconnecter »
   ferment le terminal sans toucher à tmux. Les terminaux que Latch ouvre sans
   raccourci (installeur, clé) ont leur section « Panneaux », en bas.
+- Zones : la place des terminaux se découpe en zones, chacune avec son
+  terminal — des hôtes différents côte à côte, ce que tmux ne sait pas faire.
+  Tout se fait à la souris, avec des actions visibles ; les raccourcis sont en
+  plus, rappelés dans les infobulles.
+  - En haut à droite, les dispositions : un, deux côte à côte, deux
+    superposés, quatre, six (3 × 2) et huit (4 × 2). Grisées si chaque
+    colonne aurait moins de 220 points.
+  - Chaque zone a sa barre de titre (session, hôte) et ses actions :
+    verrouiller (⌥⌘L), couper à droite (⌘D), en dessous (⇧⌘D), agrandir
+    (⇧⌘↩), fermer (⌘W). Seule à l'écran, elle n'a ni cadre ni barre : ses
+    actions sont dans la bande du haut.
+  - Un clic dans la barre latérale affiche la session dans la zone active ;
+    verrouillée, dans la dernière zone non verrouillée ; tout verrouillé, la
+    plus grande zone se coupe. Au survol, la zone qui recevra le clic
+    s'entoure de pointillés. « Ouvrir à côté » (bouton au survol, ⌥-clic)
+    coupe la zone active.
+  - Glisser une session sur une zone : au centre elle la remplace (refusé si
+    la zone est verrouillée), sur un bord elle la coupe de ce côté.
+  - Un terminal n'est jamais dans deux zones : déjà à l'écran, il est
+    déplacé. Fermer une zone le laisse connecté hors de l'écran ;
+    « Déconnecter » le ferme et vide sa zone.
+  - Une zone vide liste les terminaux ouverts, puis les raccourcis.
+  - Pendant qu'on glisse un séparateur, l'hôte ne reçoit que la taille
+    finale ; double-clic : parts égales.
 - Zone terminal : padding 18–22 px, interligne 1,25 (multiplicateur de la
   hauteur de ligne de la police).
 - Barre d'état basse, très discrète : état Claude Code, branche git, diff,
