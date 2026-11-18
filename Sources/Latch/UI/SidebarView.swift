@@ -140,6 +140,7 @@ private struct ServerSection: View {
                 Text(server.name)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.latchText)
+                    .lineLimit(1)
 
                 if let activity = app.claudeActivity(on: server.sshAlias) {
                     ClaudeDot(activity: activity)
@@ -240,9 +241,13 @@ private struct ShortcutRow: View {
             }
         } label: {
             HStack(spacing: 6) {
+                // Une ligne, toujours : les boutons du survol prennent leur
+                // place au nom, qui se coupe au lieu de passer à la ligne.
                 Text(shortcut.displayName)
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(isSelected || isOnScreen ? Color.latchText : Color.latchTextDim)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 // Le témoin du serveur dit qu'une session veut quelque chose ;
                 // celui-ci dit laquelle, quand ses fenêtres ne le disent pas
