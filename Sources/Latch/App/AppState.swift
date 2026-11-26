@@ -185,6 +185,10 @@ final class AppState: ObservableObject {
     ) async -> TerminalSession? {
         if view == nil, let existing = tab(for: shortcut) {
             show(existing.id, in: zoneID)
+            // Un terminal terminé ne se rouvrait plus : le clic montrait son
+            // cadavre. Il relance la même commande — `new -A` recrée la
+            // session si l'hôte l'a perdue.
+            if existing.hasEnded { existing.reconnectNow() }
             return existing
         }
 

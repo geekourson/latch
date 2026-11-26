@@ -34,6 +34,7 @@
 "aucune session" = "no session";
 "D'accord" = "OK";
 "Réessayer" = "Retry";
+"Relancer" = "Relaunch";
 "Latch" = "Latch";
 "Claude Code attend une réponse" = "Claude Code is waiting for an answer";
 "Claude Code a terminé" = "Claude Code has finished";

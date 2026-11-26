@@ -250,6 +250,17 @@ final class TerminalSession: ObservableObject, Identifiable {
         scheduleReconnect(immediately: true)
     }
 
+    /// Le process est mort et rien ne le relancera seul : quitté — par
+    /// l'utilisateur, ou par l'hôte qui a perdu la session — ou abandonné
+    /// après trois échecs. Un terminal pas encore démarré n'en fait pas partie.
+    var hasEnded: Bool {
+        switch connection {
+        case .failed: return true
+        case .idle: return lastExitCode != nil
+        default: return false
+        }
+    }
+
     /// Relance à la demande, après un échec — c'est l'action que le §8 attend
     /// de l'utilisateur plutôt qu'une boucle silencieuse.
     func reconnectNow() {

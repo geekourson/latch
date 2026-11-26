@@ -256,6 +256,24 @@ final class WindowPlacementTests: XCTestCase {
         XCTAssertEqual(state.orphanSessions(on: "").map(\.name), ["vieille"])
     }
 
+    /// Un terminal terminé — la session perdue par l'hôte — se relance au
+    /// clic sur son raccourci, au lieu de rester affiché mort.
+    func testClickingAnEndedSessionRelaunchesIt() async {
+        let (state, shortcut) = makeState()
+        let tab = TerminalSession(name: "api", command: "exit 0", shortcutID: shortcut.id,
+                                  tmuxSession: "api")
+        state.add(tab)
+        tab.start(rows: 24, cols: 80)
+        let deadline = Date().addingTimeInterval(5)
+        while !tab.hasEnded, Date() < deadline { try? await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(tab.hasEnded, "le process est sorti")
+
+        let reopened = await state.open(shortcut)
+        XCTAssertTrue(reopened === tab, "le même terminal, pas un second")
+        XCTAssertFalse(tab.hasEnded, "il est relancé")
+        state.closeAll()
+    }
+
     /// La fenêtre glissée porte le nom de sa session et le sien.
     func testAWindowItemIsNamedAfterBoth() {
         let (state, shortcut) = makeState()

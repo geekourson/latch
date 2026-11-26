@@ -133,6 +133,11 @@ private struct StatusBar: View {
                 Button("Réessayer") { app.selectedTab?.reconnectNow() }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.latchAccent)
+            } else if app.selectedTab?.hasEnded == true {
+                // Terminé : la pastille le dit, ce bouton le répare.
+                Button("Relancer") { app.selectedTab?.reconnectNow() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.latchAccent)
             }
 
             Spacer()
