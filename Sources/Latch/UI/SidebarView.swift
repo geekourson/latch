@@ -242,12 +242,11 @@ private struct ShortcutRow: View {
         } label: {
             HStack(spacing: 6) {
                 // Une ligne, toujours : les boutons du survol prennent leur
-                // place au nom, qui se coupe au lieu de passer à la ligne.
-                Text(shortcut.displayName)
+                // place au nom, qui se coupe au lieu de passer à la ligne —
+                // et défile pour se lire en entier.
+                MarqueeText(text: shortcut.displayName, isActive: isHovering)
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundStyle(isSelected || isOnScreen ? Color.latchText : Color.latchTextDim)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
 
                 // Le témoin du serveur dit qu'une session veut quelque chose ;
                 // celui-ci dit laquelle, quand ses fenêtres ne le disent pas
@@ -408,9 +407,8 @@ private struct WindowRow: View {
                     .foregroundStyle(Color.latchText)
                     .onSubmit { commitRename() }
             } else {
-                Text(window.name)
+                MarqueeText(text: window.name, isActive: isHovering)
                     .foregroundStyle(presence == .hidden ? Color.latchTextDim : Color.latchText)
-                    .lineLimit(1)
                     .layoutPriority(1)
                 // Le témoin le plus précis : celui du Claude de cette fenêtre.
                 if let activity = app.claudeActivity(in: window, on: host) {
