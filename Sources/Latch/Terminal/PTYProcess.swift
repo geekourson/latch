@@ -145,6 +145,9 @@ final class PTYProcess {
         let cArgv = Self.makeCStringArray(["/bin/sh", "-c", command])
         let cEnv = Self.makeCStringArray(env.map { "\($0.key)=\($0.value)" })
         let cPath = strdup("/bin/sh")
+        // Lancée depuis le Finder, l'app vit dans `/` : sans ça, un shell ou
+        // une session tmux locale sans dossier y démarreraient aussi.
+        let cHome = strdup(env["HOME"] ?? NSHomeDirectory())
 
         var size = winsize(ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0)
         var master: Int32 = -1
@@ -154,6 +157,7 @@ final class PTYProcess {
         if child == 0 {
             // Fils. `forkpty` a déjà appelé `login_tty` : nouvelle session,
             // terminal de contrôle en place. Il ne reste qu'à se remplacer.
+            if let cHome { _ = chdir(cHome) }
             execve(cPath, cArgv, cEnv)
             _exit(127)  // execve n'a pas rendu la main : /bin/sh introuvable.
         }
@@ -161,6 +165,7 @@ final class PTYProcess {
         Self.freeCStringArray(cArgv)
         Self.freeCStringArray(cEnv)
         free(cPath)
+        free(cHome)
 
         guard child > 0 else {
             throw PTYError.forkFailed(code: errno)

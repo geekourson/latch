@@ -655,6 +655,9 @@ final class TmuxInspector: ObservableObject {
             guard let tmux = localTmux else { return nil }
             task.executableURL = URL(fileURLWithPath: tmux)
             task.arguments = arguments
+            // Une fenêtre créée d'ici s'ouvre dans le dossier du client tmux,
+            // c'est-à-dire le nôtre : `/` pour une app lancée du Finder.
+            task.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         }
         return task
     }

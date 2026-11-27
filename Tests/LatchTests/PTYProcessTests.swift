@@ -85,6 +85,19 @@ final class PTYProcessTests: XCTestCase {
         XCTAssertTrue(result.output.contains("PROGRAM=[]"), "sortie reçue : \(result.output)")
     }
 
+    /// Le fils démarre dans le dossier de l'utilisateur, pas dans celui de
+    /// l'app — `/` quand elle est lancée du Finder.
+    func testStartsInTheHomeFolder() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("latch-home-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let result = try run("printf 'pwd=[%s]\\n' \"$(pwd)\"",
+                             environment: ["HOME": home.path, "PATH": "/usr/bin:/bin"])
+        // `/var` est un lien vers `/private/var` : on compare la fin.
+        XCTAssertTrue(result.output.contains("\(home.lastPathComponent)]"), "sortie reçue : \(result.output)")
+    }
+
     func testInitialWindowSizeIsPropagated() throws {
         let result = try run("stty size", rows: 40, cols: 132)
         XCTAssertTrue(result.output.contains("40 132"), "sortie reçue : \(result.output)")
